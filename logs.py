@@ -8,7 +8,9 @@ def setup_logging(log_path: str) -> logging.Logger:
     logger = logging.getLogger("speedmonitor")
     logger.setLevel(logging.INFO)
 
-    if logger.hasHandlers():
+    # Check handlers attached to *this* logger only; hasHandlers() propagates to
+    # ancestor loggers (e.g. root) and would wrongly skip attaching here.
+    if logger.handlers:
         return logger
 
     formatter = logging.Formatter(

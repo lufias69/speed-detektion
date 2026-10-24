@@ -13,6 +13,7 @@ from sqlalchemy import (
     event,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.sql import func, text
 
 Base = declarative_base()
@@ -39,7 +40,16 @@ def _set_utc(mapper, connection, target):
 
 def get_engine(db_path: str):
     os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    # ":memory:" needs StaticPool so every thread shares the single connection;
+    # the default SingletonThreadPool gives each thread its own empty database.
+    if db_path == ":memory:":
+        engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+    else:
+        engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
 
     with engine.connect() as conn:
