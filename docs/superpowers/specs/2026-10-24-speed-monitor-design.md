@@ -115,7 +115,7 @@ Indexes:
    - Set `was_online = True`.
 6. Insert record into SQLite.
 
-The speed-test interval is configurable; default is 10 minutes. The recovery speed test ensures the first measurement after an outage is captured.
+The speed-test interval is configurable; default is 1 hour. The recovery speed test ensures the first measurement after an outage is captured.
 
 ---
 
@@ -195,7 +195,7 @@ python main.py
   "ping_timeout_seconds": 2,
   "ping_retries": 3,
   "check_interval_seconds": 60,
-  "speed_test_interval_seconds": 600,
+  "speed_test_interval_seconds": 3600,
   "run_speed_test_on_recovery": true,
   "speed_test_cli_path": "speedtest-cli",
   "database_path": "data/speed_monitor.db",

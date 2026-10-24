@@ -77,7 +77,7 @@ def test_load_config_returns_defaults(tmp_path):
     cfg = load_config(str(tmp_path / "config.json"))
     assert cfg.ping_host == "8.8.8.8"
     assert cfg.check_interval_seconds == 60
-    assert cfg.speed_test_interval_seconds == 600
+    assert cfg.speed_test_interval_seconds == 3600
     assert cfg.web_port == 5000
 ```
 
@@ -101,7 +101,7 @@ DEFAULT_CONFIG = {
     "ping_timeout_seconds": 2,
     "ping_retries": 3,
     "check_interval_seconds": 60,
-    "speed_test_interval_seconds": 600,
+    "speed_test_interval_seconds": 3600,
     "run_speed_test_on_recovery": True,
     "speed_test_cli_path": "speedtest-cli",
     "database_path": "data/speed_monitor.db",
@@ -117,7 +117,7 @@ class Config:
     ping_timeout_seconds: int = 2
     ping_retries: int = 3
     check_interval_seconds: int = 60
-    speed_test_interval_seconds: int = 600
+    speed_test_interval_seconds: int = 3600
     run_speed_test_on_recovery: bool = True
     speed_test_cli_path: str = "speedtest-cli"
     database_path: str = "data/speed_monitor.db"
@@ -742,7 +742,7 @@ from checker import CheckResult
 
 
 def test_monitor_records_online_without_speedtest():
-    cfg = Config(check_interval_seconds=60, speed_test_interval_seconds=600)
+    cfg = Config(check_interval_seconds=60, speed_test_interval_seconds=3600)
     session = MagicMock()
     monitor = Monitor(cfg, session)
 

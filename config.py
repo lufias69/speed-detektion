@@ -8,7 +8,7 @@ DEFAULT_CONFIG = {
     "ping_timeout_seconds": 2,
     "ping_retries": 3,
     "check_interval_seconds": 60,
-    "speed_test_interval_seconds": 600,
+    "speed_test_interval_seconds": 3600,
     "run_speed_test_on_recovery": True,
     "speed_test_cli_path": "speedtest-cli",
     "database_path": "data/speed_monitor.db",
@@ -24,7 +24,7 @@ class Config:
     ping_timeout_seconds: int = 2
     ping_retries: int = 3
     check_interval_seconds: int = 60
-    speed_test_interval_seconds: int = 600
+    speed_test_interval_seconds: int = 3600
     run_speed_test_on_recovery: bool = True
     speed_test_cli_path: str = "speedtest-cli"
     database_path: str = "data/speed_monitor.db"
