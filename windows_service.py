@@ -24,12 +24,17 @@ class SpeedMonitorService(win32serviceutil.ServiceFramework):
 
     def SvcDoRun(self):
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
-        proc = subprocess.Popen([PYTHON, os.path.join(ROOT, "main.py")], cwd=ROOT)
-        while proc.poll() is None:
-            rc = win32event.WaitForSingleObject(self.hWaitStop, 1000)
-            if rc == win32event.WAIT_OBJECT_0:
-                proc.terminate()
-                break
+        self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+        while True:
+            proc = subprocess.Popen([PYTHON, os.path.join(ROOT, "main.py")], cwd=ROOT)
+            while proc.poll() is None:
+                rc = win32event.WaitForSingleObject(self.hWaitStop, 1000)
+                if rc == win32event.WAIT_OBJECT_0:
+                    proc.terminate()
+                    return
+            # child died; wait a beat so a hard crash does not hot-loop, then restart
+            if win32event.WaitForSingleObject(self.hWaitStop, 3000) == win32event.WAIT_OBJECT_0:
+                return
 
 if __name__ == "__main__":
     win32serviceutil.HandleCommandLine(SpeedMonitorService)

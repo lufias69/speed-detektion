@@ -13,10 +13,12 @@ logger = logging.getLogger("speedmonitor")
 
 
 class Monitor:
-    def __init__(self, config: Config, session: Session):
+    def __init__(self, config: Config, session_factory):
+        # A SQLAlchemy Session is not thread-safe; each tick receives its own
+        # session via session_factory so scheduler threads never share one.
         self.config = config
-        self.session = session
-        self.last_speed_test: Optional[datetime] = datetime.now(timezone.utc)
+        self._session_factory = session_factory
+        self.last_speed_test: Optional[datetime] = None
         self.was_online: bool = True
 
     def _should_run_speedtest(self, now: datetime) -> bool:
@@ -52,7 +54,7 @@ class Monitor:
         else:
             self.was_online = False
 
-        add_record(self.session, record)
+        add_record(self._session_factory(), record)
         logger.info(
             "recorded %s ssid=%s ping=%s down=%s up=%s",
             record.status,
@@ -62,10 +64,3 @@ class Monitor:
             record.upload_mbps,
         )
         return record
-
-    def start(self):
-        import time
-
-        while True:
-            self.tick()
-            time.sleep(self.config.check_interval_seconds)

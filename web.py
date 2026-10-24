@@ -19,9 +19,15 @@ from db import (
 
 
 def _record_to_dict(record: SpeedRecord) -> dict:
+    # SQLite returns naive datetimes; values are stored as UTC, so re-attach
+    # UTC before serializing (isoformat() alone emits no offset, and JS would
+    # then parse the string as local time).
+    ts = record.timestamp
+    if ts and ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
     return {
         "id": record.id,
-        "timestamp": record.timestamp.isoformat() if record.timestamp else None,
+        "timestamp": ts.isoformat().replace("+00:00", "Z") if ts else None,
         "ssid": record.ssid,
         "status": record.status,
         "ping_ms": record.ping_ms,
@@ -88,10 +94,14 @@ def create_app(config: Config, engine=None) -> FastAPI:
             session.close()
 
     @app.get("/api/export")
-    def export(format: str = Query("json")):
+    def export(
+        format: str = Query("json"),
+        start: Optional[datetime] = Query(None),
+        end: Optional[datetime] = Query(None),
+    ):
         session = get_db()
         try:
-            rows = get_records_in_range(session)
+            rows = get_records_in_range(session, start, end)
             data = [_record_to_dict(r) for r in rows]
             if format == "json":
                 return JSONResponse(content=data)

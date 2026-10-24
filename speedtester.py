@@ -15,7 +15,8 @@ class SpeedTestResult:
 
 
 def run_speedtest(cli_path: str) -> Optional[SpeedTestResult]:
-    cmd = [cli_path, "--format=json", "--accept-license", "--accept-gdpr"]
+    # sivel/speedtest-cli: --json flag, output units are bits/s
+    cmd = [cli_path, "--json"]
     try:
         proc = subprocess.run(
             cmd,
@@ -29,8 +30,8 @@ def run_speedtest(cli_path: str) -> Optional[SpeedTestResult]:
             return None
 
         data = json.loads(proc.stdout)
-        download = data.get("download", 0) / 1_250_000  # speedtest-cli raw units -> Mbps
-        upload = data.get("upload", 0) / 1_250_000
+        download = data.get("download", 0) / 1_000_000  # bits/s -> Mbps
+        upload = data.get("upload", 0) / 1_000_000
         ping = data.get("ping", 0)
         return SpeedTestResult(download, upload, ping)
     except subprocess.TimeoutExpired:

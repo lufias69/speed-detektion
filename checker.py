@@ -75,6 +75,7 @@ def _get_ssid_windows() -> Optional[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        timeout=5,
     )
     if proc.returncode != 0:
         return None

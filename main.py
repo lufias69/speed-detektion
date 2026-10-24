@@ -3,7 +3,7 @@ import argparse
 import logging
 import signal
 import sys
-import threading
+from datetime import datetime, timezone
 
 import uvicorn
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,8 +24,9 @@ def build_app(config: Config):
 
 def build_monitor(config: Config):
     engine = get_engine(config.database_path)
-    session = get_session(engine)
-    return Monitor(config, session)
+    # Each tick gets its own session; a Session is not thread-safe and the
+    # scheduler runs ticks on its own thread (a speed test tick lasts up to 120 s).
+    return Monitor(config, lambda: get_session(engine))
 
 
 def main():
@@ -46,13 +47,10 @@ def main():
         "interval",
         seconds=config.check_interval_seconds,
         id="speed_check",
+        next_run_time=datetime.now(timezone.utc),  # first tick immediately
         replace_existing=True,
     )
     scheduler.start()
-
-    # Run first tick immediately in a background thread
-    first_tick = threading.Thread(target=monitor.tick, daemon=True)
-    first_tick.start()
 
     app = build_app(config)
 

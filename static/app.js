@@ -69,16 +69,22 @@ async function loadDashboard() {
   pingChart.data.datasets[0].data = records.slice().reverse().map(r => r.ping_ms);
   pingChart.update();
 
-  els.recordsBody.innerHTML = records.slice(0, 100).map(r => `
+  els.recordsBody.innerHTML = records.slice(0, 100).map(r => {
+    const esc = (v) => {
+      const d = document.createElement('div');
+      d.textContent = v;
+      return d.innerHTML;
+    };
+    return `
     <tr>
       <td>${fmtDate(r.timestamp)}</td>
-      <td>${r.ssid || '-'}</td>
-      <td>${r.status}</td>
+      <td>${esc(r.ssid || '-')}</td>
+      <td>${esc(r.status)}</td>
       <td>${fmtNum(r.ping_ms, 0)}</td>
       <td>${fmtNum(r.download_mbps)}</td>
       <td>${fmtNum(r.upload_mbps)}</td>
     </tr>
-  `).join('');
+  `;}).join('');
 }
 
 document.addEventListener('DOMContentLoaded', () => {

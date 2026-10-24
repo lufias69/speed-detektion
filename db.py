@@ -80,6 +80,16 @@ def get_recent_records(session: Session, limit: int = 100) -> List[SpeedRecord]:
     )
 
 
+def _as_utc_naive(dt: Optional[datetime]) -> Optional[datetime]:
+    # Stored timestamps are naive UTC; drop offsets from filter bounds so the
+    # string-backed comparison matches regardless of the client's timezone.
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def get_records_in_range(
     session: Session,
     start: Optional[datetime] = None,
@@ -88,9 +98,9 @@ def get_records_in_range(
 ) -> List[SpeedRecord]:
     query = session.query(SpeedRecord)
     if start:
-        query = query.filter(SpeedRecord.timestamp >= start)
+        query = query.filter(SpeedRecord.timestamp >= _as_utc_naive(start))
     if end:
-        query = query.filter(SpeedRecord.timestamp <= end)
+        query = query.filter(SpeedRecord.timestamp <= _as_utc_naive(end))
     query = query.order_by(SpeedRecord.timestamp.desc())
     if limit:
         query = query.limit(limit)
@@ -100,9 +110,9 @@ def get_records_in_range(
 def get_stats(session: Session, start: Optional[datetime] = None, end: Optional[datetime] = None):
     query = session.query(SpeedRecord)
     if start:
-        query = query.filter(SpeedRecord.timestamp >= start)
+        query = query.filter(SpeedRecord.timestamp >= _as_utc_naive(start))
     if end:
-        query = query.filter(SpeedRecord.timestamp <= end)
+        query = query.filter(SpeedRecord.timestamp <= _as_utc_naive(end))
 
     rows = query.order_by(SpeedRecord.timestamp.desc()).all()
     if not rows:

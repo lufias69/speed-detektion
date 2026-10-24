@@ -45,12 +45,17 @@ class SpeedMonitorService(win32serviceutil.ServiceFramework):
 
     def SvcDoRun(self):
         self.ReportServiceStatus(win32service.SERVICE_RUNNING)
-        proc = subprocess.Popen([PYTHON, os.path.join(ROOT, "main.py")], cwd=ROOT)
-        while proc.poll() is None:
-            rc = win32event.WaitForSingleObject(self.hWaitStop, 1000)
-            if rc == win32event.WAIT_OBJECT_0:
-                proc.terminate()
-                break
+        self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+        while True:
+            proc = subprocess.Popen([PYTHON, os.path.join(ROOT, "main.py")], cwd=ROOT)
+            while proc.poll() is None:
+                rc = win32event.WaitForSingleObject(self.hWaitStop, 1000)
+                if rc == win32event.WAIT_OBJECT_0:
+                    proc.terminate()
+                    return
+            # child died; wait a beat so a hard crash does not hot-loop, then restart
+            if win32event.WaitForSingleObject(self.hWaitStop, 3000) == win32event.WAIT_OBJECT_0:
+                return
 
 if __name__ == "__main__":
     win32serviceutil.HandleCommandLine(SpeedMonitorService)
@@ -58,8 +63,16 @@ if __name__ == "__main__":
         encoding="utf-8",
     )
     print(f"Created {service_script}")
-    print("Run as Administrator: .venv\\Scripts\\python windows_service.py install")
-    print("Then: .venv\\Scripts\\python windows_service.py start")
+    print("Attempting service install (needs Administrator)...")
+    import subprocess as sp
+    for cmd in (["install"], ["start"]):
+        r = sp.run([str(VENV / "Scripts" / "python.exe"), str(service_script)] + cmd,
+                   capture_output=True, text=True)
+        out = (r.stdout or "") + (r.stderr or "")
+        # pywin32's HandleCommandLine prints errors but may still exit 0,
+        # so inspect output, not just the return code.
+        failed = r.returncode != 0 or "error" in out.lower()
+        print(f"windows_service.py {cmd}: {'FAILED: ' + out.strip()[:300] if failed else 'ok'}")
 
 
 def install_linux():
@@ -84,8 +97,12 @@ WantedBy=default.target
         encoding="utf-8",
     )
     print(f"Created {unit_file}")
-    print("Run: systemctl --user daemon-reload")
-    print("Run: systemctl --user enable --now speedmonitor")
+    import subprocess as sp
+    for cmd in (["systemctl", "--user", "daemon-reload"],
+                ["systemctl", "--user", "enable", "--now", "speedmonitor"]):
+        r = sp.run(cmd, capture_output=True, text=True)
+        status = "ok" if r.returncode == 0 else f"failed ({r.stderr.strip()})"
+        print(f"{' '.join(cmd)}: {status}")
 
 
 def main():
