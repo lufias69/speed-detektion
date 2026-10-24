@@ -1,0 +1,124 @@
+import os
+from datetime import datetime, timezone
+from typing import List, Optional
+
+from sqlalchemy import (
+    create_engine,
+    Column,
+    Integer,
+    String,
+    Float,
+    DateTime,
+    Text,
+    event,
+)
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+from sqlalchemy.sql import func, text
+
+Base = declarative_base()
+
+
+class SpeedRecord(Base):
+    __tablename__ = "speed_records"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
+    ssid = Column(String(255), nullable=True)
+    status = Column(String(16), nullable=False)
+    ping_ms = Column(Float, nullable=True)
+    download_mbps = Column(Float, nullable=True)
+    upload_mbps = Column(Float, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
+@event.listens_for(SpeedRecord, "before_insert", propagate=True)
+def _set_utc(mapper, connection, target):
+    if target.timestamp and target.timestamp.tzinfo is None:
+        target.timestamp = target.timestamp.replace(tzinfo=timezone.utc)
+
+
+def get_engine(db_path: str):
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(engine)
+
+    with engine.connect() as conn:
+        conn.execute(text("PRAGMA journal_mode=WAL;"))
+        conn.execute(text("PRAGMA synchronous=NORMAL;"))
+
+    return engine
+
+
+def get_session(engine) -> Session:
+    SessionLocal = sessionmaker(bind=engine)
+    return SessionLocal()
+
+
+def add_record(session: Session, record: SpeedRecord) -> SpeedRecord:
+    session.add(record)
+    session.commit()
+    session.refresh(record)
+    return record
+
+
+def get_recent_records(session: Session, limit: int = 100) -> List[SpeedRecord]:
+    return (
+        session.query(SpeedRecord)
+        .order_by(SpeedRecord.timestamp.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def get_records_in_range(
+    session: Session,
+    start: Optional[datetime] = None,
+    end: Optional[datetime] = None,
+    limit: Optional[int] = None,
+) -> List[SpeedRecord]:
+    query = session.query(SpeedRecord)
+    if start:
+        query = query.filter(SpeedRecord.timestamp >= start)
+    if end:
+        query = query.filter(SpeedRecord.timestamp <= end)
+    query = query.order_by(SpeedRecord.timestamp.desc())
+    if limit:
+        query = query.limit(limit)
+    return query.all()
+
+
+def get_stats(session: Session, start: Optional[datetime] = None, end: Optional[datetime] = None):
+    query = session.query(SpeedRecord)
+    if start:
+        query = query.filter(SpeedRecord.timestamp >= start)
+    if end:
+        query = query.filter(SpeedRecord.timestamp <= end)
+
+    rows = query.order_by(SpeedRecord.timestamp.desc()).all()
+    if not rows:
+        return {
+            "count": 0,
+            "online_count": 0,
+            "offline_count": 0,
+            "uptime_percent": 0.0,
+            "avg_download": None,
+            "avg_upload": None,
+            "avg_ping": None,
+        }
+
+    online = [r for r in rows if r.status == "online"]
+    offline = [r for r in rows if r.status == "offline"]
+
+    def avg(values):
+        clean = [v for v in values if v is not None]
+        return sum(clean) / len(clean) if clean else None
+
+    return {
+        "count": len(rows),
+        "online_count": len(online),
+        "offline_count": len(offline),
+        "uptime_percent": round(len(online) / len(rows) * 100, 2),
+        "avg_download": avg([r.download_mbps for r in online]),
+        "avg_upload": avg([r.upload_mbps for r in online]),
+        "avg_ping": avg([r.ping_ms for r in online]),
+    }
