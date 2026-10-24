@@ -3,6 +3,7 @@ import argparse
 import logging
 import signal
 import sys
+import threading
 from datetime import datetime, timezone
 
 import uvicorn

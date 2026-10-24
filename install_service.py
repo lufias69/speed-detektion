@@ -97,12 +97,6 @@ WantedBy=default.target
         encoding="utf-8",
     )
     print(f"Created {unit_file}")
-    import subprocess as sp
-    for cmd in (["systemctl", "--user", "daemon-reload"],
-                ["systemctl", "--user", "enable", "--now", "speedmonitor"]):
-        r = sp.run(cmd, capture_output=True, text=True)
-        status = "ok" if r.returncode == 0 else f"failed ({r.stderr.strip()})"
-        print(f"{' '.join(cmd)}: {status}")
 
 
 def main():
