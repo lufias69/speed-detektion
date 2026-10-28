@@ -649,14 +649,19 @@ class MainWindow(QMainWindow):
             from speedtester import SpeedTester
             from checker import check_connection
             from db import add_record
+            import traceback
 
             try:
+                logger.info("manual speedtest: starting")
                 tester = SpeedTester(
                     cli_path=self.config.speed_test_cli_path,
                     cooldown_file="data/.speedtest_last_run_manual",
                 )
+                logger.info("manual speedtest: SpeedTester created, cli=%s", tester.cli_path)
                 speed = tester.run(force=True)
+                logger.info("manual speedtest: raw result=%s", speed)
                 check = check_connection(self.config)
+                logger.info("manual speedtest: ping status=%s ping_ms=%s", check.status, check.ping_ms)
                 record = SpeedRecord(
                     timestamp=check.timestamp,
                     ssid=check.ssid,
@@ -675,10 +680,14 @@ class MainWindow(QMainWindow):
                     record.download_mbps = speed.download_mbps
                     record.upload_mbps = speed.upload_mbps
                     record.ping_ms = speed.ping_ms
+                    logger.info("manual speedtest: assigned down=%s up=%s", speed.download_mbps, speed.upload_mbps)
+                else:
+                    logger.warning("manual speedtest: no speed result or status=%s", record.status)
 
                 session = get_session(self.engine)
                 try:
                     add_record(session, record)
+                    logger.info("manual speedtest: record saved id=%s", record.id)
                 finally:
                     session.close()
 
@@ -688,7 +697,8 @@ class MainWindow(QMainWindow):
                     5000,
                 )
             except Exception as exc:
-                logger.warning("manual speedtest failed: %s", exc)
+                tb = traceback.format_exc()
+                logger.error("manual speedtest failed: %s\n%s", exc, tb)
                 self.statusBar().showMessage(f"Speedtest failed: {exc}", 5000)
             finally:
                 # Always close the progress dialog and restore cursor on the GUI thread

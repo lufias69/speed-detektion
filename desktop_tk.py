@@ -418,14 +418,19 @@ class TkDesktopApp:
             from speedtester import SpeedTester
             from checker import check_connection
             from db import add_record
+            import traceback
 
             try:
+                logger.info("manual speedtest: starting")
                 tester = SpeedTester(
                     cli_path=self.config.speed_test_cli_path,
                     cooldown_file="data/.speedtest_last_run_manual",
                 )
+                logger.info("manual speedtest: SpeedTester created, cli=%s", tester.cli_path)
                 speed = tester.run(force=True)
+                logger.info("manual speedtest: raw result=%s", speed)
                 check = check_connection(self.config)
+                logger.info("manual speedtest: ping status=%s down=%s up=%s", check.status, check.ping_ms, None)
                 record = SpeedRecord(
                     timestamp=check.timestamp,
                     ssid=check.ssid,
@@ -444,10 +449,14 @@ class TkDesktopApp:
                     record.download_mbps = speed.download_mbps
                     record.upload_mbps = speed.upload_mbps
                     record.ping_ms = speed.ping_ms
+                    logger.info("manual speedtest: assigned down=%s up=%s", speed.download_mbps, speed.upload_mbps)
+                else:
+                    logger.warning("manual speedtest: no speed result or status=%s", record.status)
 
                 session = get_session(self.engine)
                 try:
                     add_record(session, record)
+                    logger.info("manual speedtest: record saved id=%s", record.id)
                 finally:
                     session.close()
 
@@ -456,8 +465,9 @@ class TkDesktopApp:
                     f"Speedtest saved: down={record.download_mbps:.2f} Mbps, up={record.upload_mbps:.2f} Mbps"
                 )
             except Exception as exc:
-                logger.warning("manual speedtest failed: %s", exc)
-                self.root.after(0, lambda: self._append_log(f"Speedtest failed: {exc}"))
+                tb = traceback.format_exc()
+                logger.error("manual speedtest failed: %s\n%s", exc, tb)
+                self.root.after(0, lambda msg=str(exc): self._append_log(f"Speedtest failed: {msg}"))
             finally:
                 self.root.after(0, close_progress)
 
