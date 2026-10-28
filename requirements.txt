@@ -8,3 +8,4 @@ pywin32>=306; platform_system=="Windows"
 pyinstaller>=6.0.0
 cryptography>=41.0.0
 keyring>=24.0.0
+matplotlib>=3.8.0

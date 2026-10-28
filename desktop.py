@@ -349,10 +349,13 @@ class MainWindow(QMainWindow):
         sync_btn.clicked.connect(self._manual_sync)
         export_btn = QPushButton("⬇ Export CSV")
         export_btn.clicked.connect(self._export_csv)
+        analytics_btn = QPushButton("📊 Analytics")
+        analytics_btn.clicked.connect(self._open_analytics)
         btn_layout.addWidget(refresh_btn)
         btn_layout.addWidget(settings_btn)
         btn_layout.addWidget(sync_btn)
         btn_layout.addWidget(export_btn)
+        btn_layout.addWidget(analytics_btn)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -616,6 +619,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Speed Monitor - {self.config.network_name} @ {self.config.location}")
         self.timer.setInterval(self.config.check_interval_seconds * 1000)
         QMessageBox.information(self, "Saved", "Settings saved. Changes take effect immediately.")
+
+    def _open_analytics(self):
+        from analytics_dialog import AnalyticsDialog
+        dialog = AnalyticsDialog(self.config, self.engine, self)
+        dialog.exec()
 
     def _manual_sync(self):
         if not self.sync.enabled():
