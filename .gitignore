@@ -1,6 +1,1 @@
-.venv/
-__pycache__/
-*.pyc
-data/*.db*
-logs/
-.pytest_cache/
+config.key
