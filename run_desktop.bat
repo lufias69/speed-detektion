@@ -7,8 +7,11 @@ if not exist ".venv\Scripts\python.exe" (
     python -m venv .venv
 )
 
+echo Ensuring pip is installed...
+.venv\Scripts\python -m ensurepip --upgrade
+
 echo Installing / updating dependencies...
-.venv\Scripts\pip install -q -r requirements.txt
+.venv\Scripts\python -m pip install -q -r requirements.txt
 
 echo Starting Speed Monitor Desktop...
 .venv\Scripts\python desktop.py %*
