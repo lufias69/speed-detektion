@@ -29,9 +29,10 @@ from PyQt6.QtWidgets import (
     QFrame,
     QSizePolicy,
     QSplitter,
+    QScreen,
 )
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QGuiApplication
 
 from config import Config, DEFAULT_CONFIG, load_config
 from db import (
@@ -245,6 +246,11 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
         layout.setContentsMargins(20, 20, 20, 20)
 
+        # Debug label: helps confirm UI has rendered
+        self._debug_label = QLabel("")
+        self._debug_label.setStyleSheet("color: #94a3b8; font-size: 11px;")
+        layout.addWidget(self._debug_label)
+
         # Header
         header = QHBoxLayout()
         title = QLabel("Speed Monitor")
@@ -374,7 +380,18 @@ class MainWindow(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._do_tick)
         self.timer.start(self.config.check_interval_seconds * 1000)
-        QTimer.singleShot(500, self._do_tick)
+        # first tick after UI has a chance to render
+        QTimer.singleShot(1000, self._do_tick)
+
+    def _center_window(self):
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        geo = screen.availableGeometry()
+        size = self.size()
+        x = max(0, (geo.width() - size.width()) // 2)
+        y = max(0, (geo.height() - size.height()) // 2)
+        self.move(x, y)
 
     def _do_tick(self):
         def tick():
@@ -399,6 +416,7 @@ class MainWindow(QMainWindow):
                 "border-radius: 16px; font-weight: 700; font-size: 13px;"
             )
         self.last_check = record.timestamp
+        self._debug_label.setText(f"Last update: {record.timestamp.strftime('%H:%M:%S')}")
         self._refresh_table()
         self._refresh_stats()
 
@@ -559,6 +577,10 @@ def run_desktop(config_path: str = "config.json", background: bool = False):
 
         window = MainWindow(config)
         window.show()
+        window.showNormal()
+        window.raise_()
+        window.activateWindow()
+        window._center_window()
         sys.exit(app.exec())
     except Exception as exc:
         print("FATAL: desktop app failed to start", exc, file=sys.stderr)
