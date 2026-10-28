@@ -398,6 +398,22 @@ class TkDesktopApp:
         """Run a speedtest on demand and save the result to the database."""
         self._append_log("Manual speedtest requested...")
 
+        # Show modal progress dialog while the speedtest runs
+        progress = tk.Toplevel(self.root)
+        progress.title("Speedtest")
+        progress.geometry("320x100")
+        progress.transient(self.root)
+        progress.grab_set()
+        progress.protocol("WM_DELETE_WINDOW", lambda: None)
+        ttk.Label(progress, text="Running speedtest, please wait...", font=("Segoe UI", 11)).pack(pady=(15, 5))
+        ttk.Label(progress, text="This may take up to 2 minutes.", font=("Segoe UI", 9)).pack()
+        self.root.config(cursor="watch")
+        progress.update()
+
+        def close_progress():
+            progress.destroy()
+            self.root.config(cursor="")
+
         def do_speedtest():
             from speedtester import SpeedTester
             from checker import check_connection
@@ -442,6 +458,8 @@ class TkDesktopApp:
             except Exception as exc:
                 logger.warning("manual speedtest failed: %s", exc)
                 self.root.after(0, lambda: self._append_log(f"Speedtest failed: {exc}"))
+            finally:
+                self.root.after(0, close_progress)
 
         threading.Thread(target=do_speedtest, daemon=True).start()
 

@@ -632,6 +632,19 @@ class MainWindow(QMainWindow):
         """Run a speedtest on demand and save the result to the database."""
         self.statusBar().showMessage("Running speedtest...")
 
+        # Show modal progress dialog while the speedtest runs
+        progress = QDialog(self)
+        progress.setWindowTitle("Speedtest")
+        progress.setFixedSize(320, 100)
+        progress.setModal(True)
+        progress.setWindowFlags(progress.windowFlags() & ~Qt.WindowType.WindowCloseButtonHint)
+        layout = QVBoxLayout(progress)
+        label = QLabel("Running speedtest, please wait...\nThis may take up to 2 minutes.")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
+        progress.show()
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+
         def do_speedtest():
             from speedtester import SpeedTester
             from checker import check_connection
@@ -677,8 +690,18 @@ class MainWindow(QMainWindow):
             except Exception as exc:
                 logger.warning("manual speedtest failed: %s", exc)
                 self.statusBar().showMessage(f"Speedtest failed: {exc}", 5000)
+            finally:
+                # Always close the progress dialog and restore cursor on the GUI thread
+                self._close_speedtest_dialog(progress)
 
         threading.Thread(target=do_speedtest, daemon=True).start()
+
+    def _close_speedtest_dialog(self, dialog: QDialog):
+        """Close the speedtest progress dialog from a background thread."""
+        def close():
+            dialog.close()
+            QApplication.restoreOverrideCursor()
+        QTimer.singleShot(0, close)
 
     def _manual_sync(self):
         if not self.sync.enabled():
