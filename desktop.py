@@ -692,10 +692,16 @@ class MainWindow(QMainWindow):
                     session.close()
 
                 self.new_record.emit(record)
-                self.statusBar().showMessage(
-                    f"Speedtest saved: down={record.download_mbps:.2f} Mbps, up={record.upload_mbps:.2f} Mbps",
-                    5000,
-                )
+                if record.download_mbps is not None and record.upload_mbps is not None:
+                    self.statusBar().showMessage(
+                        f"Speedtest saved: down={record.download_mbps:.2f} Mbps, up={record.upload_mbps:.2f} Mbps",
+                        5000,
+                    )
+                else:
+                    self.statusBar().showMessage(
+                        "Speedtest completed but no speed result was captured",
+                        5000,
+                    )
             except Exception as exc:
                 tb = traceback.format_exc()
                 logger.error("manual speedtest failed: %s\n%s", exc, tb)

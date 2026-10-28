@@ -461,9 +461,14 @@ class TkDesktopApp:
                     session.close()
 
                 self.root.after(0, lambda: self._on_record(record))
-                self._append_log(
-                    f"Speedtest saved: down={record.download_mbps:.2f} Mbps, up={record.upload_mbps:.2f} Mbps"
-                )
+                if record.download_mbps is not None and record.upload_mbps is not None:
+                    self._append_log(
+                        f"Speedtest saved: down={record.download_mbps:.2f} Mbps, up={record.upload_mbps:.2f} Mbps"
+                    )
+                else:
+                    self._append_log(
+                        "Speedtest completed but no speed result was captured (check speedtest-cli or network)"
+                    )
             except Exception as exc:
                 tb = traceback.format_exc()
                 logger.error("manual speedtest failed: %s\n%s", exc, tb)
