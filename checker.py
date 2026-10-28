@@ -2,11 +2,36 @@ import platform
 import re
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 
 from config import Config
+
+
+@dataclass
+class PingStatistics:
+    sent: int = 0
+    received: int = 0
+    lost: int = 0
+    loss_percent: Optional[float] = None
+    min_ms: Optional[float] = None
+    max_ms: Optional[float] = None
+    avg_ms: Optional[float] = None
+
+
+@dataclass
+class PingReply:
+    bytes_size: int = 0
+    time_ms: Optional[float] = None
+    ttl: Optional[int] = None
+
+
+@dataclass
+class PingResult:
+    success: bool
+    replies: List[PingReply] = field(default_factory=list)
+    stats: PingStatistics = field(default_factory=PingStatistics)
 
 
 @dataclass
@@ -17,15 +42,97 @@ class CheckResult:
     adapter: Optional[str]
     status: str
     ping_ms: Optional[float]
+    ping_ttl: Optional[int]
+    packet_size: Optional[int]
+    ping_min_ms: Optional[float]
+    ping_max_ms: Optional[float]
+    ping_avg_ms: Optional[float]
+    packet_loss_percent: Optional[float]
     error_message: Optional[str] = None
 
 
-def _ping_host(host: str, timeout: int) -> Tuple[bool, Optional[float]]:
+def _parse_windows_ping_line(line: str) -> Optional[PingReply]:
+    # Reply from 8.8.8.8: bytes=32 time=76ms TTL=117
+    m = re.search(r"bytes=(\d+)\s+time[<=]=(\d+)ms\s+TTL=(\d+)", line, re.IGNORECASE)
+    if m:
+        return PingReply(
+            bytes_size=int(m.group(1)),
+            time_ms=float(m.group(2)),
+            ttl=int(m.group(3)),
+        )
+    return None
+
+
+def _parse_linux_ping_line(line: str) -> Optional[PingReply]:
+    # 64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=76.0 ms
+    m = re.search(r"(\d+)\s+bytes\s+from\s+.*?ttl=(\d+)\s+time[<=]=([\d.]+)\s*ms", line, re.IGNORECASE)
+    if m:
+        return PingReply(
+            bytes_size=int(m.group(1)),
+            ttl=int(m.group(2)),
+            time_ms=float(m.group(3)),
+        )
+    return None
+
+
+def _parse_ping_output(output: str, system: str) -> PingResult:
+    result = PingResult(success=False)
+    lines = output.splitlines()
+
+    if system == "windows":
+        for line in lines:
+            reply = _parse_windows_ping_line(line)
+            if reply:
+                result.success = True
+                result.replies.append(reply)
+
+        # Ping statistics for 8.8.8.8:
+        #     Packets: Sent = 4, Received = 4, Lost = 0 (0% loss),
+        # Approximate round trip times in milli-seconds:
+        #     Minimum = 74ms, Maximum = 494ms, Average = 182ms
+        for line in lines:
+            m = re.search(r"Sent\s*=\s*(\d+),\s*Received\s*=\s*(\d+),\s*Lost\s*=\s*(\d+)\s*\((\d+)%\s*loss", line, re.IGNORECASE)
+            if m:
+                result.stats.sent = int(m.group(1))
+                result.stats.received = int(m.group(2))
+                result.stats.lost = int(m.group(3))
+                result.stats.loss_percent = float(m.group(4))
+            m = re.search(r"Minimum\s*=\s*([\d.]+)ms\s*,\s*Maximum\s*=\s*([\d.]+)ms\s*,\s*Average\s*=\s*([\d.]+)ms", line, re.IGNORECASE)
+            if m:
+                result.stats.min_ms = float(m.group(1))
+                result.stats.max_ms = float(m.group(2))
+                result.stats.avg_ms = float(m.group(3))
+    else:
+        for line in lines:
+            reply = _parse_linux_ping_line(line)
+            if reply:
+                result.success = True
+                result.replies.append(reply)
+
+        # 4 packets transmitted, 4 received, 0% packet loss, time 3005ms
+        for line in lines:
+            m = re.search(r"(\d+)\s+packets?\s+transmitted,\s*(\d+)\s+received,?\s*(?:\+\d+\s+errors?,?\s*)?(\d+)%\s*packet\s+loss", line, re.IGNORECASE)
+            if m:
+                result.stats.sent = int(m.group(1))
+                result.stats.received = int(m.group(2))
+                result.stats.loss_percent = float(m.group(3))
+                result.stats.lost = result.stats.sent - result.stats.received
+            # rtt min/avg/max/mdev = 74.123/182.456/494.789/...
+            m = re.search(r"rtt\s+min/avg/max(?:/mdev)?\s*=\s*([\d.]+)/([\d.]+)/([\d.]+)", line, re.IGNORECASE)
+            if m:
+                result.stats.min_ms = float(m.group(1))
+                result.stats.avg_ms = float(m.group(2))
+                result.stats.max_ms = float(m.group(3))
+
+    return result
+
+
+def _ping_host(host: str, timeout: int, retries: int) -> PingResult:
     system = platform.system().lower()
     if system == "windows":
-        cmd = ["ping", "-n", "1", "-w", str(timeout * 1000), host]
+        cmd = ["ping", "-n", str(retries), "-w", str(timeout * 1000), host]
     else:
-        cmd = ["ping", "-c", "1", "-W", str(timeout), host]
+        cmd = ["ping", "-c", str(retries), "-W", str(timeout), host]
 
     try:
         proc = subprocess.run(
@@ -33,34 +140,11 @@ def _ping_host(host: str, timeout: int) -> Tuple[bool, Optional[float]]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=timeout + 1,
+            timeout=timeout * retries + 2,
         )
-        success = proc.returncode == 0
-        latency = None
-        if success:
-            latency = _parse_ping_output(proc.stdout, system)
-        return success, latency
+        return _parse_ping_output(proc.stdout, system)
     except Exception as exc:
-        return False, None
-
-
-def _parse_ping_output(output: str, system: str) -> Optional[float]:
-    try:
-        if system == "windows":
-            # Average = 24ms
-            for line in output.splitlines():
-                if "Average" in line and "=" in line:
-                    part = line.split("=")[-1].strip()
-                    return float(part.replace("ms", "").strip())
-        else:
-            # rtt min/avg/max/mdev = ...
-            for line in output.splitlines():
-                if "avg" in line and "/" in line:
-                    parts = line.split("=")[-1].split("/")
-                    return float(parts[1].strip())
-    except Exception:
-        pass
-    return None
+        return PingResult(success=False)
 
 
 def _get_active_connection() -> Tuple[Optional[str], Optional[str]]:
@@ -75,12 +159,10 @@ def _get_active_connection() -> Tuple[Optional[str], Optional[str]]:
 
 
 def _get_active_connection_windows() -> Tuple[Optional[str], Optional[str]]:
-    # Try Wi-Fi first
     ssid = _get_ssid_windows()
     if ssid:
         return ssid, "WiFi"
 
-    # Otherwise look for an active Ethernet adapter
     proc = subprocess.run(
         ["netsh", "interface", "show", "interface"],
         stdout=subprocess.PIPE,
@@ -94,8 +176,6 @@ def _get_active_connection_windows() -> Tuple[Optional[str], Optional[str]]:
     for line in proc.stdout.splitlines():
         if "Connected" in line and "Dedicated" in line:
             parts = [p.strip() for p in line.split() if p.strip()]
-            # Typical line: Admin State State             Type             Interface Name
-            #                Connected    Connected      Dedicated      Ethernet
             if len(parts) >= 4:
                 adapter = parts[-1]
                 if "wi-fi" in adapter.lower() or "wireless" in adapter.lower():
@@ -109,7 +189,6 @@ def _get_active_connection_linux() -> Tuple[Optional[str], Optional[str]]:
     if ssid:
         return ssid, "WiFi"
 
-    # Find active ethernet interface (not loopback, state UP, has carrier)
     try:
         proc = subprocess.run(
             ["ip", "-o", "link", "show", "up"],
@@ -188,38 +267,46 @@ def _get_ssid_linux() -> Optional[str]:
 def check_connection(config: Config) -> CheckResult:
     timestamp = datetime.now(timezone.utc)
     adapter, detected_type = _get_active_connection()
-
-    # If user has overridden the connection type (e.g. Fiber), keep their label
-    # but still use the detected adapter name if available.
     connection_type = config.connection_type or detected_type or "Unknown"
 
-    # Primary host
-    for attempt in range(config.ping_retries):
-        success, latency = _ping_host(config.ping_host, config.ping_timeout_seconds)
-        if success:
+    ping = _ping_host(config.ping_host, config.ping_timeout_seconds, config.ping_retries)
+
+    if ping.success:
+        first = ping.replies[0]
+        return CheckResult(
+            timestamp=timestamp,
+            ssid=adapter,
+            connection_type=connection_type,
+            adapter=adapter,
+            status="online",
+            ping_ms=ping.stats.avg_ms if ping.stats.avg_ms is not None else first.time_ms,
+            ping_ttl=first.ttl,
+            packet_size=first.bytes_size,
+            ping_min_ms=ping.stats.min_ms,
+            ping_max_ms=ping.stats.max_ms,
+            ping_avg_ms=ping.stats.avg_ms,
+            packet_loss_percent=ping.stats.loss_percent,
+        )
+
+    if config.fallback_host:
+        time.sleep(config.fallback_delay_seconds)
+        ping = _ping_host(config.fallback_host, config.ping_timeout_seconds, config.ping_retries)
+        if ping.success:
+            first = ping.replies[0]
             return CheckResult(
                 timestamp=timestamp,
                 ssid=adapter,
                 connection_type=connection_type,
                 adapter=adapter,
                 status="online",
-                ping_ms=latency,
+                ping_ms=ping.stats.avg_ms if ping.stats.avg_ms is not None else first.time_ms,
+                ping_ttl=first.ttl,
+                packet_size=first.bytes_size,
+                ping_min_ms=ping.stats.min_ms,
+                ping_max_ms=ping.stats.max_ms,
+                ping_avg_ms=ping.stats.avg_ms,
+                packet_loss_percent=ping.stats.loss_percent,
             )
-
-    # Fallback host after configured delay
-    if config.fallback_host:
-        time.sleep(config.fallback_delay_seconds)
-        for attempt in range(config.ping_retries):
-            success, latency = _ping_host(config.fallback_host, config.ping_timeout_seconds)
-            if success:
-                return CheckResult(
-                    timestamp=timestamp,
-                    ssid=adapter,
-                    connection_type=connection_type,
-                    adapter=adapter,
-                    status="online",
-                    ping_ms=latency,
-                )
 
     return CheckResult(
         timestamp=timestamp,
@@ -228,4 +315,10 @@ def check_connection(config: Config) -> CheckResult:
         adapter=adapter,
         status="offline",
         ping_ms=None,
+        ping_ttl=None,
+        packet_size=None,
+        ping_min_ms=None,
+        ping_max_ms=None,
+        ping_avg_ms=None,
+        packet_loss_percent=None,
     )

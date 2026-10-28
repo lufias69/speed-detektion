@@ -40,6 +40,12 @@ class Monitor:
             adapter=result.adapter,
             status=result.status,
             ping_ms=result.ping_ms,
+            ping_ttl=result.ping_ttl,
+            packet_size=result.packet_size,
+            ping_min_ms=result.ping_min_ms,
+            ping_max_ms=result.ping_max_ms,
+            ping_avg_ms=result.ping_avg_ms,
+            packet_loss_percent=result.packet_loss_percent,
         )
 
         if result.status == "online":

@@ -29,6 +29,12 @@ class SpeedRecord(Base):
     adapter = Column(String(255), nullable=True)
     status = Column(String(16), nullable=False)
     ping_ms = Column(Float, nullable=True)
+    ping_ttl = Column(Integer, nullable=True)
+    packet_size = Column(Integer, nullable=True)
+    ping_min_ms = Column(Float, nullable=True)
+    ping_max_ms = Column(Float, nullable=True)
+    ping_avg_ms = Column(Float, nullable=True)
+    packet_loss_percent = Column(Float, nullable=True)
     download_mbps = Column(Float, nullable=True)
     upload_mbps = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
@@ -51,6 +57,12 @@ def _migrate_columns(engine):
     model_columns = {
         "connection_type": "VARCHAR(32)",
         "adapter": "VARCHAR(255)",
+        "ping_ttl": "INTEGER",
+        "packet_size": "INTEGER",
+        "ping_min_ms": "FLOAT",
+        "ping_max_ms": "FLOAT",
+        "ping_avg_ms": "FLOAT",
+        "packet_loss_percent": "FLOAT",
         "synced_at": "DATETIME",
         "cloud_id": "VARCHAR(255)",
     }

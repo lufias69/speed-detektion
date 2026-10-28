@@ -13,6 +13,12 @@ def _check_result():
         adapter="WiFi",
         status="online",
         ping_ms=10.0,
+        ping_ttl=117,
+        packet_size=32,
+        ping_min_ms=8.0,
+        ping_max_ms=15.0,
+        ping_avg_ms=10.0,
+        packet_loss_percent=0.0,
     )
 
 

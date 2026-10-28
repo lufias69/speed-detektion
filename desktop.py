@@ -315,6 +315,10 @@ class MainWindow(QMainWindow):
         self.avg_down = self._summary_card("Avg Download", "-", "Mbps")
         self.avg_up = self._summary_card("Avg Upload", "-", "Mbps")
         self.avg_ping = self._summary_card("Avg Ping", "-", "ms")
+        self.ping_ttl = self._summary_card("TTL", "-", "")
+        self.ping_min = self._summary_card("Ping Min", "-", "ms")
+        self.ping_max = self._summary_card("Ping Max", "-", "ms")
+        self.ping_loss = self._summary_card("Packet Loss", "-", "%")
         self.uptime = self._summary_card("Uptime", "-", "%")
         self.conn_type = self._summary_card("Connection", "-", "")
         self.synced_label = self._summary_card("Cloud Sync", "off", "")
@@ -323,10 +327,14 @@ class MainWindow(QMainWindow):
         cards.addWidget(self.avg_down, 0, 0)
         cards.addWidget(self.avg_up, 0, 1)
         cards.addWidget(self.avg_ping, 0, 2)
-        cards.addWidget(self.uptime, 0, 3)
-        cards.addWidget(self.conn_type, 1, 0)
-        cards.addWidget(self.synced_label, 1, 1)
-        cards.addWidget(self.last_check_label, 1, 2)
+        cards.addWidget(self.ping_ttl, 0, 3)
+        cards.addWidget(self.ping_min, 1, 0)
+        cards.addWidget(self.ping_max, 1, 1)
+        cards.addWidget(self.ping_loss, 1, 2)
+        cards.addWidget(self.uptime, 1, 3)
+        cards.addWidget(self.conn_type, 2, 0)
+        cards.addWidget(self.synced_label, 2, 1)
+        cards.addWidget(self.last_check_label, 2, 2)
         layout.addLayout(cards)
 
         # Actions
@@ -354,9 +362,9 @@ class MainWindow(QMainWindow):
         table_label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
         table_layout.addWidget(table_label)
         self.table = QTableWidget()
-        self.table.setColumnCount(8)
+        self.table.setColumnCount(14)
         self.table.setHorizontalHeaderLabels(
-            ["Time", "SSID", "Connection", "Status", "Ping", "Down", "Up", "Synced"]
+            ["Time", "SSID", "Conn", "Status", "Ping", "TTL", "Size", "Min", "Max", "Avg", "Loss%", "Down", "Up", "Synced"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
@@ -449,6 +457,10 @@ class MainWindow(QMainWindow):
         local_ts = _localize(record.timestamp, self.config.timezone)
         self._debug_label.setText(f"Last update (WITA): {local_ts.strftime('%H:%M:%S')}")
         self._set_card_value(self.conn_type, record.connection_type or "Unknown", None, "")
+        self._set_card_value(self.ping_ttl, record.ping_ttl, None, "")
+        self._set_card_value(self.ping_min, record.ping_min_ms, "{:.1f}", "ms")
+        self._set_card_value(self.ping_max, record.ping_max_ms, "{:.1f}", "ms")
+        self._set_card_value(self.ping_loss, record.packet_loss_percent, "{:.0f}", "%")
         self._refresh_table()
         self._refresh_stats()
 
@@ -502,11 +514,17 @@ class MainWindow(QMainWindow):
             status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.table.setItem(i, 3, status_item)
             self.table.setItem(i, 4, QTableWidgetItem(self._fmt_num(r.ping_ms, "{:.1f}")))
-            self.table.setItem(i, 5, QTableWidgetItem(self._fmt_num(r.download_mbps, "{:.2f}")))
-            self.table.setItem(i, 6, QTableWidgetItem(self._fmt_num(r.upload_mbps, "{:.2f}")))
+            self.table.setItem(i, 5, QTableWidgetItem(str(r.ping_ttl) if r.ping_ttl is not None else "-"))
+            self.table.setItem(i, 6, QTableWidgetItem(str(r.packet_size) if r.packet_size is not None else "-"))
+            self.table.setItem(i, 7, QTableWidgetItem(self._fmt_num(r.ping_min_ms, "{:.1f}")))
+            self.table.setItem(i, 8, QTableWidgetItem(self._fmt_num(r.ping_max_ms, "{:.1f}")))
+            self.table.setItem(i, 9, QTableWidgetItem(self._fmt_num(r.ping_avg_ms, "{:.1f}")))
+            self.table.setItem(i, 10, QTableWidgetItem(self._fmt_num(r.packet_loss_percent, "{:.0f}")))
+            self.table.setItem(i, 11, QTableWidgetItem(self._fmt_num(r.download_mbps, "{:.2f}")))
+            self.table.setItem(i, 12, QTableWidgetItem(self._fmt_num(r.upload_mbps, "{:.2f}")))
             sync_item = QTableWidgetItem("Yes" if r.cloud_id else "No")
             sync_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(i, 7, sync_item)
+            self.table.setItem(i, 13, sync_item)
 
     def _fmt_num(self, value, fmt: str) -> str:
         return fmt.format(value) if value is not None else "-"
