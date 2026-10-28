@@ -343,6 +343,8 @@ class MainWindow(QMainWindow):
         btn_layout = QHBoxLayout()
         refresh_btn = QPushButton("↻ Refresh Now")
         refresh_btn.clicked.connect(self._do_tick)
+        speedtest_btn = QPushButton("⚡ Run Speedtest")
+        speedtest_btn.clicked.connect(self._run_speedtest_manual)
         settings_btn = QPushButton("⚙ Settings")
         settings_btn.clicked.connect(self._open_settings)
         sync_btn = QPushButton("↑ Sync to Cloud")
@@ -352,6 +354,7 @@ class MainWindow(QMainWindow):
         analytics_btn = QPushButton("📊 Analytics")
         analytics_btn.clicked.connect(self._open_analytics)
         btn_layout.addWidget(refresh_btn)
+        btn_layout.addWidget(speedtest_btn)
         btn_layout.addWidget(settings_btn)
         btn_layout.addWidget(sync_btn)
         btn_layout.addWidget(export_btn)
@@ -624,6 +627,58 @@ class MainWindow(QMainWindow):
         from analytics_dialog import AnalyticsDialog
         dialog = AnalyticsDialog(self.config, self.engine, self)
         dialog.exec()
+
+    def _run_speedtest_manual(self):
+        """Run a speedtest on demand and save the result to the database."""
+        self.statusBar().showMessage("Running speedtest...")
+
+        def do_speedtest():
+            from speedtester import SpeedTester
+            from checker import check_connection
+            from db import add_record
+
+            try:
+                tester = SpeedTester(
+                    cli_path=self.config.speed_test_cli_path,
+                    cooldown_file="data/.speedtest_last_run_manual",
+                )
+                speed = tester.run(force=True)
+                check = check_connection(self.config)
+                record = SpeedRecord(
+                    timestamp=check.timestamp,
+                    ssid=check.ssid,
+                    connection_type=check.connection_type,
+                    adapter=check.adapter,
+                    status=check.status,
+                    ping_ms=check.ping_ms,
+                    ping_ttl=check.ping_ttl,
+                    packet_size=check.packet_size,
+                    ping_min_ms=check.ping_min_ms,
+                    ping_max_ms=check.ping_max_ms,
+                    ping_avg_ms=check.ping_avg_ms,
+                    packet_loss_percent=check.packet_loss_percent,
+                )
+                if speed and record.status == "online":
+                    record.download_mbps = speed.download_mbps
+                    record.upload_mbps = speed.upload_mbps
+                    record.ping_ms = speed.ping_ms
+
+                session = get_session(self.engine)
+                try:
+                    add_record(session, record)
+                finally:
+                    session.close()
+
+                self.new_record.emit(record)
+                self.statusBar().showMessage(
+                    f"Speedtest saved: down={record.download_mbps:.2f} Mbps, up={record.upload_mbps:.2f} Mbps",
+                    5000,
+                )
+            except Exception as exc:
+                logger.warning("manual speedtest failed: %s", exc)
+                self.statusBar().showMessage(f"Speedtest failed: {exc}", 5000)
+
+        threading.Thread(target=do_speedtest, daemon=True).start()
 
     def _manual_sync(self):
         if not self.sync.enabled():

@@ -196,6 +196,7 @@ class TkDesktopApp:
         btn_frame = ttk.Frame(self.root, padding="10")
         btn_frame.pack(fill=tk.X)
         ttk.Button(btn_frame, text="Refresh Now", command=self._do_tick).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Run Speedtest", command=self._run_speedtest_manual).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Settings", command=self._open_settings).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Sync to Cloud", command=self._manual_sync).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Export CSV", command=self._export_csv).pack(side=tk.LEFT, padx=5)
@@ -392,6 +393,57 @@ class TkDesktopApp:
             self.monitor.config = self.config
             self.sync.config = self.config
             self.root.title(f"Speed Monitor - {self.config.network_name} @ {self.config.location}")
+
+    def _run_speedtest_manual(self):
+        """Run a speedtest on demand and save the result to the database."""
+        self._append_log("Manual speedtest requested...")
+
+        def do_speedtest():
+            from speedtester import SpeedTester
+            from checker import check_connection
+            from db import add_record
+
+            try:
+                tester = SpeedTester(
+                    cli_path=self.config.speed_test_cli_path,
+                    cooldown_file="data/.speedtest_last_run_manual",
+                )
+                speed = tester.run(force=True)
+                check = check_connection(self.config)
+                record = SpeedRecord(
+                    timestamp=check.timestamp,
+                    ssid=check.ssid,
+                    connection_type=check.connection_type,
+                    adapter=check.adapter,
+                    status=check.status,
+                    ping_ms=check.ping_ms,
+                    ping_ttl=check.ping_ttl,
+                    packet_size=check.packet_size,
+                    ping_min_ms=check.ping_min_ms,
+                    ping_max_ms=check.ping_max_ms,
+                    ping_avg_ms=check.ping_avg_ms,
+                    packet_loss_percent=check.packet_loss_percent,
+                )
+                if speed and record.status == "online":
+                    record.download_mbps = speed.download_mbps
+                    record.upload_mbps = speed.upload_mbps
+                    record.ping_ms = speed.ping_ms
+
+                session = get_session(self.engine)
+                try:
+                    add_record(session, record)
+                finally:
+                    session.close()
+
+                self.root.after(0, lambda: self._on_record(record))
+                self._append_log(
+                    f"Speedtest saved: down={record.download_mbps:.2f} Mbps, up={record.upload_mbps:.2f} Mbps"
+                )
+            except Exception as exc:
+                logger.warning("manual speedtest failed: %s", exc)
+                self.root.after(0, lambda: self._append_log(f"Speedtest failed: {exc}"))
+
+        threading.Thread(target=do_speedtest, daemon=True).start()
 
     def _manual_sync(self):
         if not self.sync.enabled():
