@@ -5,7 +5,7 @@ import sys
 import threading
 import tkinter as tk
 from datetime import datetime, timezone, timedelta
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 
 try:
     from zoneinfo import ZoneInfo
@@ -19,6 +19,7 @@ from db import (
     get_engine,
     get_session,
     get_recent_records,
+    get_records_in_range,
     get_stats,
 )
 from logs import setup_logging
@@ -88,6 +89,7 @@ class TkSettingsDialog(tk.Toplevel):
             ("Location", "location"),
             ("Connection Type", "connection_type"),
             ("Speedtest Interval (s)", "speed_test_interval_seconds"),
+            ("Run Speedtests", "run_speed_tests"),
             ("Ping Host", "ping_host"),
             ("Fallback Host", "fallback_host"),
             ("Fallback Delay (s)", "fallback_delay_seconds"),
@@ -103,6 +105,7 @@ class TkSettingsDialog(tk.Toplevel):
             if key == "run_speed_tests":
                 var = tk.BooleanVar(value=bool(value))
                 widget = ttk.Checkbutton(frame, variable=var)
+                widget.grid(row=i, column=1, sticky=tk.W, pady=2)
                 self.fields[key] = var
             else:
                 entry = ttk.Entry(frame)
@@ -127,6 +130,7 @@ class TkSettingsDialog(tk.Toplevel):
         try:
             data["speed_test_interval_seconds"] = int(data["speed_test_interval_seconds"])
             data["fallback_delay_seconds"] = int(data["fallback_delay_seconds"])
+            data["run_speed_tests"] = bool(data["run_speed_tests"])
         except ValueError:
             messagebox.showerror("Invalid input", "Interval and delay must be numbers.")
             return
@@ -194,15 +198,52 @@ class TkDesktopApp:
         ttk.Button(btn_frame, text="Refresh Now", command=self._do_tick).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Settings", command=self._open_settings).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Sync to Cloud", command=self._manual_sync).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Export CSV", command=self._export_csv).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="Analytics", command=self._open_analytics).pack(side=tk.LEFT, padx=5)
+
+        # Filter bar
+        filter_frame = ttk.Frame(self.root, padding="5")
+        filter_frame.pack(fill=tk.X)
+        ttk.Label(filter_frame, text="Filter:").pack(side=tk.LEFT, padx=2)
+        self.filter_var = tk.StringVar(value="Today")
+        self.filter_combo = ttk.Combobox(filter_frame, textvariable=self.filter_var, values=["Today", "Last 7 days", "Last 14 days", "Last 30 days", "Custom range"], state="readonly", width=14)
+        self.filter_combo.pack(side=tk.LEFT, padx=2)
+        self.filter_combo.bind("<<ComboboxSelected>>", self._on_filter_changed)
+
+        ttk.Label(filter_frame, text="From:").pack(side=tk.LEFT, padx=(10, 2))
+        self.start_date = tk.StringVar()
+        self.start_entry = ttk.Entry(filter_frame, textvariable=self.start_date, width=12)
+        self.start_entry.pack(side=tk.LEFT, padx=2)
+        self.start_entry.config(state="disabled")
+
+        ttk.Label(filter_frame, text="To:").pack(side=tk.LEFT, padx=(10, 2))
+        self.end_date = tk.StringVar()
+        self.end_entry = ttk.Entry(filter_frame, textvariable=self.end_date, width=12)
+        self.end_entry.pack(side=tk.LEFT, padx=2)
+        self.end_entry.config(state="disabled")
+
+        self.apply_btn = ttk.Button(filter_frame, text="Apply", command=self._apply_filter)
+        self.apply_btn.pack(side=tk.LEFT, padx=(10, 2))
+        self.apply_btn.config(state="disabled")
 
         table_frame = ttk.Frame(self.root, padding="10")
         table_frame.pack(fill=tk.BOTH, expand=True)
         ttk.Label(table_frame, text="Recent Records", font=("Segoe UI", 10, "bold")).pack(anchor=tk.W)
-        cols = ("Date", "Time", "SSID", "Connection", "Status", "Ping (ms)", "TTL (hops)", "Size (B)", "Min (ms)", "Max (ms)", "Avg (ms)", "Loss %", "Down (Mbps)", "Up (Mbps)", "Synced")
+        cols = ("Date", "Time", "SSID", "Conn", "Status", "Ping (ms)", "TTL (hops)", "Size (B)", "Min (ms)", "Max (ms)", "Avg (ms)", "Loss %", "Down (Mbps)", "Up (Mbps)", "Synced")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings")
         for c in cols:
             self.tree.heading(c, text=c)
-            self.tree.column(c, width=90)
+            self.tree.column(c, width=75, anchor=tk.CENTER)
+        self.tree.column("Date", width=80)
+        self.tree.column("Time", width=70)
+        self.tree.column("SSID", width=100)
+        self.tree.column("Conn", width=70)
+        self.tree.column("Status", width=60)
+
+        # Scrollbar for table
+        vsb = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=vsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
         self.tree.pack(fill=tk.BOTH, expand=True)
 
         log_frame = ttk.Frame(self.root, padding="10")
@@ -239,10 +280,67 @@ class TkDesktopApp:
         self._refresh_table()
         self._append_log(f"{record.status} ping={record.ping_ms} type={record.connection_type}")
 
+    def _on_filter_changed(self, event=None):
+        choice = self.filter_var.get()
+        is_custom = choice == "Custom range"
+        state = "normal" if is_custom else "disabled"
+        self.start_entry.config(state=state)
+        self.end_entry.config(state=state)
+        self.apply_btn.config(state="normal" if is_custom else "disabled")
+        if not is_custom:
+            self._refresh_table()
+            self._refresh_stats()
+
+    def _parse_date(self, text: str):
+        try:
+            return datetime.strptime(text.strip(), "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    def _apply_filter(self, event=None):
+        self._refresh_table()
+        self._refresh_stats()
+
+    def _get_filter_range(self):
+        tz = ZoneInfo(self.config.timezone)
+        now = datetime.now(tz)
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        choice = self.filter_var.get()
+
+        if choice == "Today":
+            start = today
+            end = now
+        elif choice == "Last 7 days":
+            start = today - timedelta(days=6)
+            end = now
+        elif choice == "Last 14 days":
+            start = today - timedelta(days=13)
+            end = now
+        elif choice == "Last 30 days":
+            start = today - timedelta(days=29)
+            end = now
+        else:
+            start_text = self.start_date.get()
+            end_text = self.end_date.get()
+            start_dt = self._parse_date(start_text)
+            end_dt = self._parse_date(end_text)
+            if start_dt is None or end_dt is None:
+                messagebox.showwarning("Invalid range", "Please enter dates in YYYY-MM-DD format.")
+                return None, None
+            if start_dt > end_dt:
+                messagebox.showwarning("Invalid range", "Start date must be before or equal to end date.")
+                return None, None
+            start = datetime.combine(start_dt, datetime.min.time(), tz)
+            end = datetime.combine(end_dt, datetime.max.time(), tz)
+        return start, end
+
     def _refresh_stats(self):
         session = get_session(self.engine)
+        start, end = self._get_filter_range()
+        if start is None:
+            return
         try:
-            stats = get_stats(session)
+            stats = get_stats(session, start, end)
             self.card_vars["Avg Download"][0].set(f"{stats['avg_download']:.2f}" if stats['avg_download'] else "-")
             self.card_vars["Avg Upload"][0].set(f"{stats['avg_upload']:.2f}" if stats['avg_upload'] else "-")
             self.card_vars["Avg Ping"][0].set(f"{stats['avg_ping']:.1f}" if stats['avg_ping'] else "-")
@@ -252,8 +350,11 @@ class TkDesktopApp:
 
     def _refresh_table(self):
         session = get_session(self.engine)
+        start, end = self._get_filter_range()
+        if start is None:
+            return
         try:
-            rows = get_recent_records(session, 50)
+            rows = get_records_in_range(session, start, end, 1000)
         finally:
             session.close()
         self.tree.delete(*self.tree.get_children())
@@ -266,8 +367,14 @@ class TkDesktopApp:
                 r.connection_type or "",
                 r.status.upper(),
                 f"{r.ping_ms:.1f}" if r.ping_ms else "-",
-                f"{r.download_mbps:.2f}" if r.download_mbps else "-",
-                f"{r.upload_mbps:.2f}" if r.upload_mbps else "-",
+                str(r.ping_ttl) if r.ping_ttl is not None else "-",
+                str(r.packet_size) if r.packet_size is not None else "-",
+                f"{r.ping_min_ms:.1f}" if r.ping_min_ms is not None else "-",
+                f"{r.ping_max_ms:.1f}" if r.ping_max_ms is not None else "-",
+                f"{r.ping_avg_ms:.1f}" if r.ping_avg_ms is not None else "-",
+                f"{r.packet_loss_percent:.0f}" if r.packet_loss_percent is not None else "-",
+                f"{r.download_mbps:.2f}" if r.download_mbps is not None else "-",
+                f"{r.upload_mbps:.2f}" if r.upload_mbps is not None else "-",
                 "Yes" if r.cloud_id else "No",
             ))
 
@@ -293,6 +400,95 @@ class TkDesktopApp:
         count = self.sync.run_once()
         self._refresh_table()
         messagebox.showinfo("Sync", f"Synced {count} records.")
+
+    def _export_csv(self):
+        start, end = self._get_filter_range()
+        if start is None:
+            return
+        default_name = f"speed_records_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}.csv"
+        path = filedialog.asksaveasfilename(defaultextension=".csv", initialfile=default_name, filetypes=[("CSV Files", "*.csv")])
+        if not path:
+            return
+
+        import csv
+        session = get_session(self.engine)
+        try:
+            rows = get_records_in_range(session, start, end)
+        finally:
+            session.close()
+
+        headers = [
+            "timestamp", "ssid", "connection_type", "adapter", "status",
+            "ping_ms", "ping_ttl", "packet_size", "ping_min_ms", "ping_max_ms",
+            "ping_avg_ms", "packet_loss_percent", "download_mbps", "upload_mbps",
+            "error_message", "synced", "cloud_id",
+        ]
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            for r in rows:
+                local_ts = _localize(r.timestamp, self.config.timezone)
+                writer.writerow([
+                    local_ts.isoformat(),
+                    r.ssid or "",
+                    r.connection_type or "",
+                    r.adapter or "",
+                    r.status,
+                    r.ping_ms,
+                    r.ping_ttl,
+                    r.packet_size,
+                    r.ping_min_ms,
+                    r.ping_max_ms,
+                    r.ping_avg_ms,
+                    r.packet_loss_percent,
+                    r.download_mbps,
+                    r.upload_mbps,
+                    r.error_message or "",
+                    "Yes" if r.cloud_id else "No",
+                    r.cloud_id or "",
+                ])
+        messagebox.showinfo("Exported", f"Saved {len(rows)} records to {path}")
+
+    def _open_analytics(self):
+        from analytics import analyze_daily
+        start, end = self._get_filter_range()
+        if start is None:
+            return
+        session = get_session(self.engine)
+        try:
+            rows = get_records_in_range(session, start, end)
+        finally:
+            session.close()
+        if not rows:
+            messagebox.showinfo("Analytics", "No records found in selected range.")
+            return
+
+        summaries = analyze_daily(rows, self.config.timezone)
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Daily Analytics")
+        dialog.geometry("900x500")
+
+        cols = ("Date", "Day", "Online (h)", "Offline (h)", "Uptime %", "Avg Ping", "Avg TTL", "Avg Loss %")
+        tree = ttk.Treeview(dialog, columns=cols, show="headings")
+        for c in cols:
+            tree.heading(c, text=c)
+            tree.column(c, width=90, anchor=tk.CENTER)
+        tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        for s in summaries:
+            tree.insert("", tk.END, values=(
+                s.date.strftime("%Y-%m-%d"),
+                s.day_name,
+                f"{s.online_hours:.1f}",
+                f"{s.offline_hours:.1f}",
+                f"{s.uptime_percent:.1f}",
+                f"{s.avg_ping_ms:.1f}" if s.avg_ping_ms is not None else "-",
+                f"{s.avg_ttl:.1f}" if s.avg_ttl is not None else "-",
+                f"{s.avg_packet_loss:.1f}" if s.avg_packet_loss is not None else "-",
+            ))
+
+        ttk.Button(dialog, text="Close", command=dialog.destroy).pack(pady=5)
 
     def run(self):
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
