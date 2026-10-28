@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QSpinBox,
     QTextEdit,
     QStatusBar,
+    QCheckBox,
 )
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 
@@ -95,6 +96,8 @@ class SettingsDialog(QDialog):
         self.interval_spin = QSpinBox()
         self.interval_spin.setRange(300, 86400)
         self.interval_spin.setValue(config.speed_test_interval_seconds)
+        self.run_speedtests_check = QCheckBox("Run speedtests")
+        self.run_speedtests_check.setChecked(config.run_speed_tests)
         self.ping_host_input = QLineEdit(config.ping_host)
         self.fallback_host_input = QLineEdit(config.fallback_host)
         self.fallback_delay_spin = QSpinBox()
@@ -108,6 +111,7 @@ class SettingsDialog(QDialog):
         layout.addRow("Network / ISP", self.network_input)
         layout.addRow("Location", self.location_input)
         layout.addRow("Speedtest Interval (s)", self.interval_spin)
+        layout.addRow(self.run_speedtests_check)
         layout.addRow("Ping Host", self.ping_host_input)
         layout.addRow("Fallback Host", self.fallback_host_input)
         layout.addRow("Fallback Delay (s)", self.fallback_delay_spin)
@@ -131,6 +135,7 @@ class SettingsDialog(QDialog):
             "network_name": self.network_input.text(),
             "location": self.location_input.text(),
             "speed_test_interval_seconds": self.interval_spin.value(),
+            "run_speed_tests": self.run_speedtests_check.isChecked(),
             "ping_host": self.ping_host_input.text(),
             "fallback_host": self.fallback_host_input.text(),
             "fallback_delay_seconds": self.fallback_delay_spin.value(),
@@ -307,6 +312,10 @@ class MainWindow(QMainWindow):
         event.accept()
 
 
+def _config_needs_setup(config: Config) -> bool:
+    return not config.network_name or not config.location
+
+
 def run_desktop(config_path: str = "config.json"):
     app = QApplication(sys.argv)
 
@@ -319,6 +328,9 @@ def run_desktop(config_path: str = "config.json"):
         for key, value in DEFAULT_CONFIG.items():
             if not hasattr(config, key):
                 setattr(config, key, value)
+        if _config_needs_setup(config):
+            from setup_wizard import run_wizard
+            config = run_wizard(config_path)
 
     setup_logging(config.log_path)
 

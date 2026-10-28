@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QPushButton,
     QMessageBox,
+    QCheckBox,
 )
 from PyQt6.QtCore import Qt
 
@@ -56,6 +57,10 @@ class SetupWizard(QWizard):
         self.interval_spin.setSingleStep(300)
         layout.addWidget(self.interval_spin)
 
+        self.run_speedtests_check = QCheckBox("Run speedtests (uncheck for ping-only mode)")
+        self.run_speedtests_check.setChecked(False)
+        layout.addWidget(self.run_speedtests_check)
+
         layout.addWidget(QLabel("Ping Host (primary)"))
         self.ping_host_input = QLineEdit("8.8.8.8")
         layout.addWidget(self.ping_host_input)
@@ -73,6 +78,7 @@ class SetupWizard(QWizard):
         page.registerField("network_name*", self.network_input)
         page.registerField("location*", self.location_input)
         page.registerField("interval", self.interval_spin, "value")
+        page.registerField("run_speedtests", self.run_speedtests_check)
         page.registerField("ping_host", self.ping_host_input)
         page.registerField("fallback_host", self.fallback_host_input)
         page.registerField("fallback_delay", self.fallback_delay_spin, "value")
@@ -152,6 +158,7 @@ class SetupWizard(QWizard):
         data["network_name"] = self.field("network_name") or ""
         data["location"] = self.field("location") or ""
         data["speed_test_interval_seconds"] = self.field("interval")
+        data["run_speed_tests"] = bool(self.field("run_speedtests"))
         data["ping_host"] = self.field("ping_host") or "8.8.8.8"
         data["fallback_host"] = self.field("fallback_host") or "8.8.4.4"
         data["fallback_delay_seconds"] = self.field("fallback_delay")

@@ -32,7 +32,11 @@ def test_monitor_records_online_without_speedtest():
 
 
 def test_monitor_runs_speedtest_when_due():
-    cfg = Config(check_interval_seconds=60, speed_test_interval_seconds=60)
+    cfg = Config(
+        check_interval_seconds=60,
+        speed_test_interval_seconds=60,
+        run_speed_tests=True,
+    )
     session = MagicMock()
     monitor = Monitor(cfg, lambda: session)
     monitor.last_speed_test = datetime.now(timezone.utc) - timedelta(seconds=120)
@@ -50,7 +54,11 @@ def test_monitor_runs_speedtest_when_due():
 def test_monitor_start_speed_test_due_from_init():
     # A fresh Monitor has never run a speed test, so the first online tick
     # must attempt one (spec §5: speed_test_due when now - last >= interval).
-    cfg = Config(check_interval_seconds=60, speed_test_interval_seconds=600)
+    cfg = Config(
+        check_interval_seconds=60,
+        speed_test_interval_seconds=600,
+        run_speed_tests=True,
+    )
     session = MagicMock()
     monitor = Monitor(cfg, lambda: session)
 
@@ -59,4 +67,22 @@ def test_monitor_start_speed_test_due_from_init():
             monitor.tick()
             mock_speed.assert_called_once()
             record = session.add.call_args[0][0]
-            assert record.error_message == "speedtest failed"
+            assert record.download_mbps is None
+
+
+def test_monitor_ping_only_mode():
+    cfg = Config(
+        check_interval_seconds=60,
+        speed_test_interval_seconds=60,
+        run_speed_tests=False,
+    )
+    session = MagicMock()
+    monitor = Monitor(cfg, lambda: session)
+
+    with patch("monitor.check_connection", return_value=_check_result()):
+        with patch("monitor.run_speedtest") as mock_speed:
+            monitor.tick()
+            mock_speed.assert_not_called()
+            record = session.add.call_args[0][0]
+            assert record.status == "online"
+            assert record.download_mbps is None

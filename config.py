@@ -11,6 +11,7 @@ DEFAULT_CONFIG = {
     "fallback_delay_seconds": 10,
     "check_interval_seconds": 60,
     "speed_test_interval_seconds": 3600,
+    "run_speed_tests": True,
     "run_speed_test_on_recovery": True,
     "speed_test_cli_path": "speedtest-cli",
     "database_path": "data/speed_monitor.db",
@@ -34,6 +35,7 @@ class Config:
     fallback_delay_seconds: int = 10
     check_interval_seconds: int = 60
     speed_test_interval_seconds: int = 3600
+    run_speed_tests: bool = True
     run_speed_test_on_recovery: bool = True
     speed_test_cli_path: str = "speedtest-cli"
     database_path: str = "data/speed_monitor.db"

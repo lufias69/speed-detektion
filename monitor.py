@@ -41,7 +41,7 @@ class Monitor:
         )
 
         if result.status == "online":
-            if self._should_run_speedtest(result.timestamp):
+            if self.config.run_speed_tests and self._should_run_speedtest(result.timestamp):
                 speed = run_speedtest(self.config.speed_test_cli_path)
                 if speed:
                     record.download_mbps = speed.download_mbps
@@ -49,7 +49,8 @@ class Monitor:
                     record.ping_ms = speed.ping_ms
                     self.last_speed_test = result.timestamp
                 else:
-                    record.error_message = "speedtest failed"
+                    # do not pollute records with speedtest errors; ping-only mode is valid
+                    logger.debug("speedtest skipped/failed, keeping ping-only record")
             self.was_online = True
         else:
             self.was_online = False
