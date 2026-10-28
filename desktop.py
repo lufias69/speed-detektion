@@ -493,26 +493,37 @@ def _config_needs_setup(config: Config) -> bool:
 
 
 def run_desktop(config_path: str = "config.json"):
-    app = QApplication(sys.argv)
-    app.setStyleSheet(APP_STYLESHEET)
+    import traceback
+    try:
+        # High-DPI scaling for crisp text on modern displays
+        QApplication.setHighDpiScaleFactorRoundingPolicy(
+            Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+        )
+        app = QApplication(sys.argv)
+        app.setStyleSheet(APP_STYLESHEET)
 
-    if not os.path.exists(config_path):
-        from setup_wizard import run_wizard
-        config = run_wizard(config_path, app=app)
-    else:
-        config = load_config(config_path)
-        for key, value in DEFAULT_CONFIG.items():
-            if not hasattr(config, key):
-                setattr(config, key, value)
-        if _config_needs_setup(config):
+        if not os.path.exists(config_path):
             from setup_wizard import run_wizard
             config = run_wizard(config_path, app=app)
+        else:
+            config = load_config(config_path)
+            for key, value in DEFAULT_CONFIG.items():
+                if not hasattr(config, key):
+                    setattr(config, key, value)
+            if _config_needs_setup(config):
+                from setup_wizard import run_wizard
+                config = run_wizard(config_path, app=app)
 
-    setup_logging(config.log_path)
+        setup_logging(config.log_path)
 
-    window = MainWindow(config)
-    window.show()
-    sys.exit(app.exec())
+        window = MainWindow(config)
+        window.show()
+        sys.exit(app.exec())
+    except Exception as exc:
+        print("FATAL: desktop app failed to start", exc, file=sys.stderr)
+        traceback.print_exc()
+        input("Press Enter to exit...")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

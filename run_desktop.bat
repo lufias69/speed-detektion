@@ -15,4 +15,7 @@ echo Installing / updating dependencies...
 
 echo Starting Speed Monitor Desktop...
 .venv\Scripts\python desktop.py %*
-pause
+if errorlevel 1 (
+    echo Desktop app exited with an error.
+    pause
+)
