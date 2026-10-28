@@ -198,7 +198,7 @@ class TkDesktopApp:
         table_frame = ttk.Frame(self.root, padding="10")
         table_frame.pack(fill=tk.BOTH, expand=True)
         ttk.Label(table_frame, text="Recent Records", font=("Segoe UI", 10, "bold")).pack(anchor=tk.W)
-        cols = ("Time", "SSID", "Connection", "Status", "Ping", "Down", "Up", "Synced")
+        cols = ("Date", "Time", "SSID", "Connection", "Status", "Ping", "Down", "Up", "Synced")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings")
         for c in cols:
             self.tree.heading(c, text=c)
@@ -260,6 +260,7 @@ class TkDesktopApp:
         for r in rows:
             local_ts = _localize(r.timestamp, self.config.timezone)
             self.tree.insert("", tk.END, values=(
+                local_ts.strftime("%Y-%m-%d"),
                 local_ts.strftime("%H:%M:%S"),
                 r.ssid or "",
                 r.connection_type or "",

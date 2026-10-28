@@ -362,9 +362,9 @@ class MainWindow(QMainWindow):
         table_label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
         table_layout.addWidget(table_label)
         self.table = QTableWidget()
-        self.table.setColumnCount(14)
+        self.table.setColumnCount(15)
         self.table.setHorizontalHeaderLabels(
-            ["Time", "SSID", "Conn", "Status", "Ping", "TTL", "Size", "Min", "Max", "Avg", "Loss%", "Down", "Up", "Synced"]
+            ["Date", "Time", "SSID", "Conn", "Status", "Ping", "TTL", "Size", "Min", "Max", "Avg", "Loss%", "Down", "Up", "Synced"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
@@ -503,28 +503,29 @@ class MainWindow(QMainWindow):
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):
             local_ts = _localize(r.timestamp, self.config.timezone)
-            self.table.setItem(i, 0, QTableWidgetItem(local_ts.strftime("%H:%M:%S")))
-            self.table.setItem(i, 1, QTableWidgetItem(r.ssid or ""))
-            self.table.setItem(i, 2, QTableWidgetItem(r.connection_type or ""))
+            self.table.setItem(i, 0, QTableWidgetItem(local_ts.strftime("%Y-%m-%d")))
+            self.table.setItem(i, 1, QTableWidgetItem(local_ts.strftime("%H:%M:%S")))
+            self.table.setItem(i, 2, QTableWidgetItem(r.ssid or ""))
+            self.table.setItem(i, 3, QTableWidgetItem(r.connection_type or ""))
             status_item = QTableWidgetItem(r.status.upper())
             if r.status == "online":
                 status_item.setForeground(self._color("#10b981"))
             else:
                 status_item.setForeground(self._color("#ef4444"))
             status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(i, 3, status_item)
-            self.table.setItem(i, 4, QTableWidgetItem(self._fmt_num(r.ping_ms, "{:.1f}")))
-            self.table.setItem(i, 5, QTableWidgetItem(str(r.ping_ttl) if r.ping_ttl is not None else "-"))
-            self.table.setItem(i, 6, QTableWidgetItem(str(r.packet_size) if r.packet_size is not None else "-"))
-            self.table.setItem(i, 7, QTableWidgetItem(self._fmt_num(r.ping_min_ms, "{:.1f}")))
-            self.table.setItem(i, 8, QTableWidgetItem(self._fmt_num(r.ping_max_ms, "{:.1f}")))
-            self.table.setItem(i, 9, QTableWidgetItem(self._fmt_num(r.ping_avg_ms, "{:.1f}")))
-            self.table.setItem(i, 10, QTableWidgetItem(self._fmt_num(r.packet_loss_percent, "{:.0f}")))
-            self.table.setItem(i, 11, QTableWidgetItem(self._fmt_num(r.download_mbps, "{:.2f}")))
-            self.table.setItem(i, 12, QTableWidgetItem(self._fmt_num(r.upload_mbps, "{:.2f}")))
+            self.table.setItem(i, 4, status_item)
+            self.table.setItem(i, 5, QTableWidgetItem(self._fmt_num(r.ping_ms, "{:.1f}")))
+            self.table.setItem(i, 6, QTableWidgetItem(str(r.ping_ttl) if r.ping_ttl is not None else "-"))
+            self.table.setItem(i, 7, QTableWidgetItem(str(r.packet_size) if r.packet_size is not None else "-"))
+            self.table.setItem(i, 8, QTableWidgetItem(self._fmt_num(r.ping_min_ms, "{:.1f}")))
+            self.table.setItem(i, 9, QTableWidgetItem(self._fmt_num(r.ping_max_ms, "{:.1f}")))
+            self.table.setItem(i, 10, QTableWidgetItem(self._fmt_num(r.ping_avg_ms, "{:.1f}")))
+            self.table.setItem(i, 11, QTableWidgetItem(self._fmt_num(r.packet_loss_percent, "{:.0f}")))
+            self.table.setItem(i, 12, QTableWidgetItem(self._fmt_num(r.download_mbps, "{:.2f}")))
+            self.table.setItem(i, 13, QTableWidgetItem(self._fmt_num(r.upload_mbps, "{:.2f}")))
             sync_item = QTableWidgetItem("Yes" if r.cloud_id else "No")
             sync_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(i, 13, sync_item)
+            self.table.setItem(i, 14, sync_item)
 
     def _fmt_num(self, value, fmt: str) -> str:
         return fmt.format(value) if value is not None else "-"
