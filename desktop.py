@@ -34,7 +34,6 @@ from PyQt6.QtWidgets import (
     QFrame,
     QSizePolicy,
     QSplitter,
-    QScreen,
     QComboBox,
 )
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
@@ -245,6 +244,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, config: Config):
         super().__init__()
+        print("DEBUG: MainWindow init started", flush=True)
         self.config = config
         self.setWindowTitle(f"Speed Monitor - {config.network_name} @ {config.location}")
         self.setMinimumSize(960, 680)
@@ -260,8 +260,10 @@ class MainWindow(QMainWindow):
             self.sync_worker = None
 
         self._build_ui()
+        print("DEBUG: _build_ui completed", flush=True)
         self._setup_scheduler()
         self.new_record.connect(self._on_new_record)
+        print("DEBUG: MainWindow init completed", flush=True)
 
     def _build_ui(self):
         central = QWidget()
@@ -607,15 +609,19 @@ def run_desktop(config_path: str = "config.json", background: bool = False):
         app.setStyleSheet(APP_STYLESHEET)
         setup_logging(config.log_path)
 
+        print("DEBUG: creating MainWindow...", flush=True)
         window = MainWindow(config)
+        print("DEBUG: showing window...", flush=True)
         window.show()
         window.showNormal()
         window.raise_()
         window.activateWindow()
         window._center_window()
+        print("DEBUG: entering event loop", flush=True)
         sys.exit(app.exec())
     except Exception as exc:
         logger.warning("PyQt6 GUI failed (%s). Falling back to Tkinter.", exc)
+        print("DEBUG: PyQt6 failed, falling back to Tkinter:", exc, flush=True)
         from desktop_tk import run_tk_desktop
         run_tk_desktop(config_path)
 
