@@ -10,12 +10,24 @@ Aplikasi desktop PyQt untuk memonitor koneksi internet secara lokal. Data disimp
 - Sinkronisasi otomatis ke Firebase Firestore (opsional).
 - Dashboard desktop: status, statistik, riwayat, export CSV.
 
-## Instalasi & Jalankan (Linux)
+## Instalasi & Jalankan
+
+### Windows
+
+Double-click file `run_desktop.bat`, atau jalankan dari Command Prompt:
+
+```cmd
+run_desktop.bat
+```
+
+### Linux
 
 ```bash
 chmod +x run_desktop.sh
 ./run_desktop.sh
 ```
+
+### Setup Pertama Kali
 
 Saat pertama kali, wizard setup muncul. Isi:
 - Network / ISP Name
@@ -27,7 +39,8 @@ Saat pertama kali, wizard setup muncul. Isi:
 ## Test
 
 ```bash
-.venv/bin/python -m pytest tests/ -q
+.venv/Scripts/python -m pytest tests/ -q      # Windows
+.venv/bin/python -m pytest tests/ -q          # Linux
 ```
 
 ## Struktur
