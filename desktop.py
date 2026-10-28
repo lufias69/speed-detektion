@@ -347,9 +347,12 @@ class MainWindow(QMainWindow):
         settings_btn.clicked.connect(self._open_settings)
         sync_btn = QPushButton("↑ Sync to Cloud")
         sync_btn.clicked.connect(self._manual_sync)
+        export_btn = QPushButton("⬇ Export CSV")
+        export_btn.clicked.connect(self._export_csv)
         btn_layout.addWidget(refresh_btn)
         btn_layout.addWidget(settings_btn)
         btn_layout.addWidget(sync_btn)
+        btn_layout.addWidget(export_btn)
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
@@ -621,6 +624,56 @@ class MainWindow(QMainWindow):
         count = self.sync.run_once()
         self._refresh_table()
         QMessageBox.information(self, "Sync", f"Synced {count} records.")
+
+    def _export_csv(self):
+        from PyQt6.QtWidgets import QFileDialog
+        import csv
+
+        start, end = self._get_filter_range()
+        if start is None:
+            return
+        default_name = f"speed_records_{start.strftime('%Y%m%d')}_{end.strftime('%Y%m%d')}.csv"
+        path, _ = QFileDialog.getSaveFileName(self, "Export CSV", default_name, "CSV Files (*.csv)")
+        if not path:
+            return
+
+        session = get_session(self.engine)
+        try:
+            rows = get_records_in_range(session, start, end)
+        finally:
+            session.close()
+
+        headers = [
+            "timestamp", "ssid", "connection_type", "adapter", "status",
+            "ping_ms", "ping_ttl", "packet_size", "ping_min_ms", "ping_max_ms",
+            "ping_avg_ms", "packet_loss_percent", "download_mbps", "upload_mbps",
+            "error_message", "synced", "cloud_id",
+        ]
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(headers)
+            for r in rows:
+                local_ts = _localize(r.timestamp, self.config.timezone)
+                writer.writerow([
+                    local_ts.isoformat(),
+                    r.ssid or "",
+                    r.connection_type or "",
+                    r.adapter or "",
+                    r.status,
+                    r.ping_ms,
+                    r.ping_ttl,
+                    r.packet_size,
+                    r.ping_min_ms,
+                    r.ping_max_ms,
+                    r.ping_avg_ms,
+                    r.packet_loss_percent,
+                    r.download_mbps,
+                    r.upload_mbps,
+                    r.error_message or "",
+                    "Yes" if r.cloud_id else "No",
+                    r.cloud_id or "",
+                ])
+        QMessageBox.information(self, "Exported", f"Saved {len(rows)} records to {path}")
 
     def closeEvent(self, event):
         if self.sync_worker:
