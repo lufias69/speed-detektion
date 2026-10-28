@@ -12,7 +12,8 @@ try:
 except ImportError:  # pragma: no cover
     from backports.zoneinfo import ZoneInfo
 
-from config import Config, DEFAULT_CONFIG, load_config
+from config import Config, DEFAULT_CONFIG
+from secure_config import decrypt_config, save_encrypted_config
 from db import (
     SpeedRecord,
     get_engine,
@@ -130,7 +131,7 @@ class TkSettingsDialog(tk.Toplevel):
             messagebox.showerror("Invalid input", "Interval and delay must be numbers.")
             return
         self.result = Config(**data)
-        _write_config("config.json", self.result.__dict__)
+        save_encrypted_config(self.result)
         self.destroy()
 
 
@@ -310,7 +311,7 @@ def run_tk_desktop(config_path: str = "config.json"):
     if not os.path.exists(config_path):
         print("Config not found. Please run the PyQt6 wizard first or create config.json manually.", file=sys.stderr)
         sys.exit(1)
-    config = load_config(config_path)
+    config = decrypt_config(config_path)
     for key, value in DEFAULT_CONFIG.items():
         if not hasattr(config, key):
             setattr(config, key, value)

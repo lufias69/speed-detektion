@@ -39,7 +39,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QGuiApplication
 
-from config import Config, DEFAULT_CONFIG, load_config
+from config import Config, DEFAULT_CONFIG
+from secure_config import decrypt_config, save_encrypted_config
 
 
 def _localize(dt: datetime, tz_name: str) -> datetime:
@@ -519,7 +520,7 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         self.config = dialog.updated_config()
-        _write_config("config.json", self.config.__dict__)
+        save_encrypted_config(self.config)
         self.monitor.config = self.config
         self.sync.config = self.config
         self.setWindowTitle(f"Speed Monitor - {self.config.network_name} @ {self.config.location}")
@@ -582,7 +583,7 @@ def run_desktop(config_path: str = "config.json", background: bool = False):
         app.setStyleSheet(APP_STYLESHEET)
         config = run_wizard(config_path, app=app)
     else:
-        config = load_config(config_path)
+        config = decrypt_config(config_path)
         for key, value in DEFAULT_CONFIG.items():
             if not hasattr(config, key):
                 setattr(config, key, value)

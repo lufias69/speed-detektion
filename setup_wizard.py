@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from config import DEFAULT_CONFIG, Config
+from secure_config import save_encrypted_config
 from checker import _get_active_connection
 
 
@@ -143,9 +144,9 @@ class SetupWizard(QWizard):
         data["fallback_delay_seconds"] = self.field("fallback_delay")
         data["timezone"] = self.field("timezone") or "Asia/Makassar"
 
-        _write_config(self.config_path, data)
-
-        return Config(**data)
+        cfg = Config(**data)
+        save_encrypted_config(cfg, self.config_path)
+        return cfg
 
 
 def _write_config(path: str, data: dict):
