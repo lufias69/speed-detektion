@@ -46,15 +46,30 @@ def main():
             cooldown_file="data/.speedtest_last_run_manual",
         )
         logger.info("SpeedTester created")
-        logger.info("speedtest-cli available: %s", tester.is_available())
+        available = tester.is_available()
+        logger.info("speedtest-cli available: %s", available)
+        if not available:
+            print("ERROR: speedtest-cli is not available. Install it with: sudo apt-get install speedtest-cli")
+            logger.error("speedtest-cli not available")
+            sys.exit(2)
 
         logger.info("Running speedtest (force=True)...")
         speed = tester.run(force=True)
         logger.info("Speedtest raw result: %s", speed)
 
+        if speed is None:
+            print("ERROR: speedtest failed (returned None). Check network connection or speedtest-cli.")
+            logger.error("speedtest returned None")
+            sys.exit(3)
+
         logger.info("Running ping check...")
         check = check_connection(config)
         logger.info("Ping status=%s ping_ms=%s", check.status, check.ping_ms)
+
+        if check.status != "online":
+            print(f"ERROR: ping status is {check.status!r}. Cannot save speedtest when offline.")
+            logger.error("ping status is not online: %s", check.status)
+            sys.exit(4)
 
         record = SpeedRecord(
             timestamp=check.timestamp,
@@ -69,19 +84,15 @@ def main():
             ping_max_ms=check.ping_max_ms,
             ping_avg_ms=check.ping_avg_ms,
             packet_loss_percent=check.packet_loss_percent,
+            download_mbps=speed.download_mbps,
+            upload_mbps=speed.upload_mbps,
         )
-        if speed and record.status == "online":
-            record.download_mbps = speed.download_mbps
-            record.upload_mbps = speed.upload_mbps
-            record.ping_ms = speed.ping_ms
-            logger.info(
-                "Assigned speed values: down=%.2f up=%.2f ping=%.1f",
-                speed.download_mbps,
-                speed.upload_mbps,
-                speed.ping_ms,
-            )
-        else:
-            logger.warning("No speed result or status not online; record will be ping-only")
+        logger.info(
+            "Assigned speed values: down=%.2f up=%.2f ping=%.1f",
+            speed.download_mbps,
+            speed.upload_mbps,
+            speed.ping_ms,
+        )
 
         engine = get_engine(config.database_path)
         session = get_session(engine)
@@ -91,6 +102,10 @@ def main():
         finally:
             session.close()
 
+        print(
+            f"SUCCESS: Speedtest saved. down={record.download_mbps:.2f} Mbps, "
+            f"up={record.upload_mbps:.2f} Mbps, ping={record.ping_ms:.1f} ms"
+        )
         logger.info(
             "FINAL: status=%s down=%s up=%s ping=%s",
             record.status,
@@ -99,6 +114,7 @@ def main():
             record.ping_ms,
         )
     except Exception as exc:
+        print(f"ERROR: Test failed with exception: {exc}")
         logger.error("Test failed: %s\n%s", exc, traceback.format_exc())
         sys.exit(1)
 
