@@ -35,8 +35,9 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QComboBox,
+    QDateEdit,
 )
-from PyQt6.QtCore import QTimer, Qt, pyqtSignal
+from PyQt6.QtCore import QTimer, Qt, pyqtSignal, QDate
 from PyQt6.QtGui import QFont, QGuiApplication
 
 from config import Config, DEFAULT_CONFIG
@@ -351,6 +352,32 @@ class MainWindow(QMainWindow):
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
+        # Filter bar
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Filter:"))
+        self.filter_combo = QComboBox()
+        self.filter_combo.addItems(["Today", "Last 7 days", "Last 14 days", "Last 30 days", "Custom range"])
+        self.filter_combo.currentTextChanged.connect(self._apply_filter)
+        self.start_date = QDateEdit()
+        self.start_date.setCalendarPopup(True)
+        self.start_date.setDate(QDate.currentDate())
+        self.start_date.setEnabled(False)
+        self.end_date = QDateEdit()
+        self.end_date.setCalendarPopup(True)
+        self.end_date.setDate(QDate.currentDate())
+        self.end_date.setEnabled(False)
+        self.apply_filter_btn = QPushButton("Apply")
+        self.apply_filter_btn.setEnabled(False)
+        self.apply_filter_btn.clicked.connect(self._apply_filter)
+        filter_layout.addWidget(self.filter_combo)
+        filter_layout.addWidget(QLabel("From:"))
+        filter_layout.addWidget(self.start_date)
+        filter_layout.addWidget(QLabel("To:"))
+        filter_layout.addWidget(self.end_date)
+        filter_layout.addWidget(self.apply_filter_btn)
+        filter_layout.addStretch()
+        layout.addLayout(filter_layout)
+
         # Splitter for table (top) and logs (bottom)
         splitter = QSplitter(Qt.Orientation.Vertical)
 
@@ -464,10 +491,47 @@ class MainWindow(QMainWindow):
         self._refresh_table()
         self._refresh_stats()
 
+    def _get_filter_range(self):
+        tz = ZoneInfo(self.config.timezone)
+        now = datetime.now(tz)
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        choice = self.filter_combo.currentText()
+
+        if choice == "Today":
+            start = today
+            end = now
+        elif choice == "Last 7 days":
+            start = today - timedelta(days=6)
+            end = now
+        elif choice == "Last 14 days":
+            start = today - timedelta(days=13)
+            end = now
+        elif choice == "Last 30 days":
+            start = today - timedelta(days=29)
+            end = now
+        else:
+            start = self.start_date.date().toPyDate()
+            end = self.end_date.date().toPyDate()
+            if start > end:
+                QMessageBox.warning(self, "Invalid range", "Start date must be before or equal to end date.")
+                return None, None
+            start = datetime.combine(start, datetime.min.time(), tz)
+            end = datetime.combine(end, datetime.max.time(), tz)
+        return start, end
+
+    def _apply_filter(self):
+        is_custom = self.filter_combo.currentText() == "Custom range"
+        self.start_date.setEnabled(is_custom)
+        self.end_date.setEnabled(is_custom)
+        self.apply_filter_btn.setEnabled(is_custom)
+        self._refresh_table()
+        self._refresh_stats()
+
     def _refresh_stats(self):
         session = get_session(self.engine)
+        start, end = self._get_filter_range()
         try:
-            stats = get_stats(session)
+            stats = get_stats(session, start, end)
             self._set_card_value(self.avg_down, stats["avg_download"], "{:.2f}", "Mbps")
             self._set_card_value(self.avg_up, stats["avg_upload"], "{:.2f}", "Mbps")
             self._set_card_value(self.avg_ping, stats["avg_ping"], "{:.1f}", "ms")
@@ -495,8 +559,11 @@ class MainWindow(QMainWindow):
 
     def _refresh_table(self):
         session = get_session(self.engine)
+        start, end = self._get_filter_range()
+        if start is None:
+            return
         try:
-            rows = get_recent_records(session, 50)
+            rows = get_records_in_range(session, start, end, 1000)
         finally:
             session.close()
 
