@@ -492,8 +492,62 @@ def _config_needs_setup(config: Config) -> bool:
     return not config.network_name or not config.location
 
 
-def run_desktop(config_path: str = "config.json"):
+def _run_background_monitor(config: Config):
+    """Headless monitoring loop without GUI. Used by autostart services."""
+    setup_logging(config.log_path)
+    engine = get_engine(config.database_path)
+    monitor = Monitor(config, lambda: get_session(engine))
+    sync = FirestoreSync(config)
+
+    def tick():
+        try:
+            record = monitor.tick()
+            if sync.enabled():
+                try:
+                    sync.run_once()
+                except Exception as exc:
+                    logger.warning("background sync error: %s", exc)
+        except Exception as exc:
+            logger.warning("background tick failed: %s", exc)
+
+    # initial tick
+    tick()
+    while True:
+        import time
+        time.sleep(config.check_interval_seconds)
+        tick()
+
+
+def run_desktop(config_path: str = "config.json", background: bool = False):
     import traceback
+
+    if not os.path.exists(config_path):
+        if background:
+            print("Config not found. Run interactively first to complete setup.", file=sys.stderr)
+            sys.exit(1)
+        from setup_wizard import run_wizard
+        app = QApplication(sys.argv)
+        app.setStyleSheet(APP_STYLESHEET)
+        config = run_wizard(config_path, app=app)
+    else:
+        config = load_config(config_path)
+        for key, value in DEFAULT_CONFIG.items():
+            if not hasattr(config, key):
+                setattr(config, key, value)
+        if _config_needs_setup(config):
+            if background:
+                print("Config incomplete. Run interactively first to complete setup.", file=sys.stderr)
+                sys.exit(1)
+            from setup_wizard import run_wizard
+            app = QApplication(sys.argv)
+            app.setStyleSheet(APP_STYLESHEET)
+            config = run_wizard(config_path, app=app)
+
+    if background:
+        setup_logging(config.log_path)
+        _run_background_monitor(config)
+        return
+
     try:
         # High-DPI scaling for crisp text on modern displays
         QApplication.setHighDpiScaleFactorRoundingPolicy(
@@ -501,19 +555,6 @@ def run_desktop(config_path: str = "config.json"):
         )
         app = QApplication(sys.argv)
         app.setStyleSheet(APP_STYLESHEET)
-
-        if not os.path.exists(config_path):
-            from setup_wizard import run_wizard
-            config = run_wizard(config_path, app=app)
-        else:
-            config = load_config(config_path)
-            for key, value in DEFAULT_CONFIG.items():
-                if not hasattr(config, key):
-                    setattr(config, key, value)
-            if _config_needs_setup(config):
-                from setup_wizard import run_wizard
-                config = run_wizard(config_path, app=app)
-
         setup_logging(config.log_path)
 
         window = MainWindow(config)
@@ -527,4 +568,9 @@ def run_desktop(config_path: str = "config.json"):
 
 
 if __name__ == "__main__":
-    run_desktop()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", default="config.json", help="Path to config.json")
+    parser.add_argument("--background", action="store_true", help="Run headless monitoring without GUI")
+    args = parser.parse_args()
+    run_desktop(args.config, background=args.background)

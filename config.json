@@ -6,11 +6,16 @@
   "fallback_delay_seconds": 10,
   "check_interval_seconds": 60,
   "speed_test_interval_seconds": 3600,
-  "run_speed_tests": true,
+  "run_speed_tests": false,
   "run_speed_test_on_recovery": true,
   "speed_test_cli_path": "speedtest-cli",
   "database_path": "data/speed_monitor.db",
   "log_path": "logs/speed_monitor.log",
   "web_host": "127.0.0.1",
-  "web_port": 5000
+  "web_port": 5000,
+  "network_name": "Mitranet",
+  "location": "Moolo Indah",
+  "firebase_api_key": "",
+  "firebase_project_id": "",
+  "firebase_collection": "speed_records"
 }

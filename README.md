@@ -34,7 +34,31 @@ Saat pertama kali, wizard setup muncul. Isi:
 - Location
 - Interval speedtest
 - Ping host & fallback host
-- Firebase config (opsional)
+- Firebase config (opsional, bisa diisi nanti lewat Settings)
+
+## Autostart Background
+
+### Windows
+
+Jalankan sebagai Administrator:
+
+```cmd
+install_autostart_windows.bat
+```
+
+Aplikasi akan berjalan otomatis saat logon, tanpa window CMD.
+Untuk melihat dashboard, jalankan `run_desktop.bat`.
+Untuk menghapus autostart: `uninstall_autostart_windows.bat`.
+
+### Linux
+
+```bash
+chmod +x install_autostart_linux.sh
+./install_autostart_linux.sh
+```
+
+Service berjalan sebagai user systemd. Untuk melihat dashboard, jalankan `./run_desktop.sh`.
+Untuk menghapus autostart: `./uninstall_autostart_linux.sh`.
 
 ## Test
 
