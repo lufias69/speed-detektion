@@ -55,6 +55,7 @@ from db import (
     get_engine,
     get_session,
     get_recent_records,
+    get_records_in_range,
     get_stats,
 )
 from logs import setup_logging
