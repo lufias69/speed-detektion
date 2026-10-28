@@ -17,7 +17,25 @@ else
     PIP=".venv/bin/pip"
 fi
 
-$PIP install -q -r requirements.txt
+. /dev/null 2>/dev/null
 
+if [ -f ".venv/Scripts/python.exe" ]; then
+    echo "Existing venv is Windows-only. Creating Linux venv..."
+    rm -rf .venv
+    PYTHON=""
+    PIP=""
+fi
+
+if [ -z "$PYTHON" ] || [ ! -x "$PYTHON" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv .venv
+    PYTHON=".venv/bin/python"
+    PIP=".venv/bin/pip"
+fi
+
+echo "Installing / updating dependencies (this may take a few minutes on first run)..."
+$PIP install -r requirements.txt
+
+echo ""
 echo "Starting Speed Monitor Desktop (Tkinter)..."
 $PYTHON desktop_tk.py "$@"

@@ -10,6 +10,11 @@ if [ -f ".venv/Scripts/python.exe" ]; then
     rm -rf .venv
 fi
 
+if [ -f ".venv/bin/python" ] && [ ! -x ".venv/bin/python" ]; then
+    echo "Existing venv has broken python symlink. Recreating Linux venv..."
+    rm -rf .venv
+fi
+
 if [ ! -d ".venv" ]; then
     echo "Creating virtual environment..."
     python3 -m venv .venv
@@ -18,8 +23,9 @@ fi
 PYTHON=".venv/bin/python"
 PIP=".venv/bin/pip"
 
-echo "Installing / updating dependencies..."
-$PIP install -q -r requirements.txt
+echo "Installing / updating dependencies (this may take a few minutes on first run)..."
+$PIP install -r requirements.txt
 
+echo ""
 echo "Starting Speed Monitor Desktop..."
 $PYTHON desktop.py "$@"
