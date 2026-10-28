@@ -53,7 +53,9 @@ class CheckResult:
 
 def _parse_windows_ping_line(line: str) -> Optional[PingReply]:
     # Reply from 8.8.8.8: bytes=32 time=76ms TTL=117
-    m = re.search(r"bytes=(\d+)\s+time[<=]=(\d+)ms\s+TTL=(\d+)", line, re.IGNORECASE)
+    # Reply from 8.8.8.8: bytes=32 time<=1ms TTL=64
+    # Match time=76ms, time<=1ms, time < 1ms, etc.
+    m = re.search(r"bytes=(\d+).*?time\s*<?=?\s*([\d.]+)ms.*?TTL=(\d+)", line, re.IGNORECASE)
     if m:
         return PingReply(
             bytes_size=int(m.group(1)),
@@ -65,7 +67,8 @@ def _parse_windows_ping_line(line: str) -> Optional[PingReply]:
 
 def _parse_linux_ping_line(line: str) -> Optional[PingReply]:
     # 64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time=76.0 ms
-    m = re.search(r"(\d+)\s+bytes\s+from\s+.*?ttl=(\d+)\s+time[<=]=([\d.]+)\s*ms", line, re.IGNORECASE)
+    # 64 bytes from 8.8.8.8: icmp_seq=1 ttl=117 time <= 76.0 ms
+    m = re.search(r"(\d+)\s+bytes\s+from\s+.*?ttl=(\d+).*?time\s*<?=?\s*([\d.]+)\s*ms", line, re.IGNORECASE)
     if m:
         return PingReply(
             bytes_size=int(m.group(1)),
