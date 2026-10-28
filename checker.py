@@ -1,5 +1,6 @@
 import platform
 import subprocess
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional, Tuple
@@ -114,8 +115,8 @@ def _get_ssid_linux() -> Optional[str]:
 def check_connection(config: Config) -> CheckResult:
     timestamp = datetime.now(timezone.utc)
     ssid = _get_ssid()
-    last_error = None
 
+    # Primary host
     for attempt in range(config.ping_retries):
         success, latency = _ping_host(config.ping_host, config.ping_timeout_seconds)
         if success:
@@ -125,6 +126,19 @@ def check_connection(config: Config) -> CheckResult:
                 status="online",
                 ping_ms=latency,
             )
+
+    # Fallback host after configured delay
+    if config.fallback_host:
+        time.sleep(config.fallback_delay_seconds)
+        for attempt in range(config.ping_retries):
+            success, latency = _ping_host(config.fallback_host, config.ping_timeout_seconds)
+            if success:
+                return CheckResult(
+                    timestamp=timestamp,
+                    ssid=ssid,
+                    status="online",
+                    ping_ms=latency,
+                )
 
     return CheckResult(
         timestamp=timestamp,

@@ -30,6 +30,8 @@ class SpeedRecord(Base):
     download_mbps = Column(Float, nullable=True)
     upload_mbps = Column(Float, nullable=True)
     error_message = Column(Text, nullable=True)
+    synced_at = Column(DateTime(timezone=True), nullable=True)
+    cloud_id = Column(String(255), nullable=True)
 
 
 @event.listens_for(SpeedRecord, "before_insert", propagate=True)
@@ -69,6 +71,22 @@ def add_record(session: Session, record: SpeedRecord) -> SpeedRecord:
     session.commit()
     session.refresh(record)
     return record
+
+
+def get_unsynced_records(session: Session, limit: int = 100) -> List[SpeedRecord]:
+    return (
+        session.query(SpeedRecord)
+        .filter(SpeedRecord.synced_at.is_(None))
+        .order_by(SpeedRecord.timestamp.asc())
+        .limit(limit)
+        .all()
+    )
+
+
+def mark_record_synced(session: Session, record: SpeedRecord, cloud_id: str):
+    record.synced_at = datetime.now(timezone.utc)
+    record.cloud_id = cloud_id
+    session.commit()
 
 
 def get_recent_records(session: Session, limit: int = 100) -> List[SpeedRecord]:

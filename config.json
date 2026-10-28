@@ -1,7 +1,9 @@
 {
   "ping_host": "8.8.8.8",
+  "fallback_host": "8.8.4.4",
   "ping_timeout_seconds": 2,
   "ping_retries": 3,
+  "fallback_delay_seconds": 10,
   "check_interval_seconds": 60,
   "speed_test_interval_seconds": 3600,
   "run_speed_test_on_recovery": true,
