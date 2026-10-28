@@ -37,7 +37,7 @@ echo "Installing / updating dependencies (this may take a few minutes on first r
 
 # On ARM64 SBCs, PyQt6 wheels are unavailable and compiling from source is difficult.
 # Use the ARM-friendly requirements file if present.
-if [ -f "requirements-arm64.txt" ] && .venv/bin/python -c "import platform; exit(0 if platform.machine().lower() in ('aarch64', 'arm64') else 1)"; then
+if [ -f "requirements-arm64.txt" ] && $PYTHON -c "import platform; exit(0 if platform.machine().lower() in ('aarch64', 'arm64') else 1)"; then
     echo "ARM64 detected. Using ARM-friendly dependency list."
     $PIP install -r requirements-arm64.txt
 else

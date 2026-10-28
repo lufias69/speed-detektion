@@ -58,10 +58,12 @@ class SpeedTester:
         cli_path: str = "speedtest-cli",
         interval_seconds: int = 3600,
         cooldown_file: str = "data/.speedtest_last_run",
+        timeout: int = 120,
     ):
         self.cli_path = cli_path
         self.interval_seconds = interval_seconds
         self.cooldown_file = cooldown_file
+        self.timeout = timeout
 
     def is_available(self) -> bool:
         """Check whether the configured speedtest-cli executable is available."""
@@ -104,7 +106,7 @@ class SpeedTester:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                timeout=120,
+                timeout=self.timeout,
             )
             if proc.returncode != 0:
                 stderr = proc.stderr.strip()
@@ -140,7 +142,7 @@ class SpeedTester:
             )
             return SpeedTestResult(download, upload, ping)
         except subprocess.TimeoutExpired:
-            logger.error("speedtest timed out after 120 seconds")
+            logger.error("speedtest timed out after %s seconds", self.timeout)
             return None
         except Exception as exc:
             logger.error("speedtest error: %s", exc, exc_info=True)

@@ -635,15 +635,20 @@ class MainWindow(QMainWindow):
         # Show modal progress dialog while the speedtest runs
         progress = QDialog(self)
         progress.setWindowTitle("Speedtest")
-        progress.setFixedSize(320, 100)
+        progress.setFixedSize(360, 120)
         progress.setModal(True)
         progress.setWindowFlags(progress.windowFlags() & ~Qt.WindowType.WindowCloseButtonHint)
         layout = QVBoxLayout(progress)
-        label = QLabel("Running speedtest, please wait...\nThis may take up to 2 minutes.")
+        label = QLabel("Running speedtest, please wait...\nAttempt 1 of 5")
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(label)
         progress.show()
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+
+        def update_label(text: str):
+            def _update():
+                label.setText(text)
+            QTimer.singleShot(0, _update)
 
         def do_speedtest():
             from speedtester import SpeedTester
@@ -657,13 +662,27 @@ class MainWindow(QMainWindow):
                     cli_path=self.config.speed_test_cli_path,
                     cooldown_file="data/.speedtest_last_run_manual",
                 )
-                logger.info("manual speedtest: SpeedTester created, cli=%s", tester.cli_path)
-                available = tester.is_available()
-                logger.info("manual speedtest: speedtest-cli available=%s", available)
-                speed = tester.run(force=True)
-                logger.info("manual speedtest: raw result=%s", speed)
+                max_attempts = 5
+                speed = None
+                for attempt in range(1, max_attempts + 1):
+                    logger.info("manual speedtest: attempt %s of %s", attempt, max_attempts)
+                    update_label(f"Running speedtest, please wait...\nAttempt {attempt} of {max_attempts}")
+                    speed = tester.run(force=True)
+                    logger.info("manual speedtest: attempt %s result=%s", attempt, speed)
+                    if speed is not None:
+                        break
+                    if attempt < max_attempts:
+                        logger.warning("manual speedtest: attempt %s failed, retrying in 3s", attempt)
+                        update_label(f"Attempt {attempt} failed, retrying...")
+                        import time
+                        time.sleep(3)
+
                 if speed is None:
-                    logger.warning("manual speedtest: SpeedTester.run() returned None")
+                    logger.error("manual speedtest: all %s attempts failed", max_attempts)
+                    self.statusBar().showMessage("Speedtest failed after 5 attempts", 5000)
+                    self._close_speedtest_dialog(progress)
+                    return
+
                 check = check_connection(self.config)
                 logger.info("manual speedtest: ping status=%s ping_ms=%s", check.status, check.ping_ms)
                 record = SpeedRecord(
@@ -680,13 +699,13 @@ class MainWindow(QMainWindow):
                     ping_avg_ms=check.ping_avg_ms,
                     packet_loss_percent=check.packet_loss_percent,
                 )
-                if speed and record.status == "online":
+                if check.status == "online":
                     record.download_mbps = speed.download_mbps
                     record.upload_mbps = speed.upload_mbps
                     record.ping_ms = speed.ping_ms
                     logger.info("manual speedtest: assigned down=%s up=%s", speed.download_mbps, speed.upload_mbps)
                 else:
-                    logger.warning("manual speedtest: no speed result or status=%s", record.status)
+                    logger.warning("manual speedtest: ping status=%s, saving ping-only record", check.status)
 
                 session = get_session(self.engine)
                 try:
