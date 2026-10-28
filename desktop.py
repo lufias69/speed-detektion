@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QFrame,
     QSizePolicy,
+    QSplitter,
 )
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -271,6 +272,12 @@ class MainWindow(QMainWindow):
         # Summary cards
         cards = QGridLayout()
         cards.setSpacing(12)
+        cards.setColumnStretch(0, 1)
+        cards.setColumnStretch(1, 1)
+        cards.setColumnStretch(2, 1)
+        cards.setColumnStretch(3, 1)
+        cards.setRowStretch(0, 1)
+        cards.setRowStretch(1, 1)
         self.avg_down = self._summary_card("Avg Download", "-", "Mbps")
         self.avg_up = self._summary_card("Avg Upload", "-", "Mbps")
         self.avg_ping = self._summary_card("Avg Ping", "-", "ms")
@@ -300,7 +307,16 @@ class MainWindow(QMainWindow):
         btn_layout.addStretch()
         layout.addLayout(btn_layout)
 
-        # History table
+        # Splitter for table (top) and logs (bottom)
+        splitter = QSplitter(Qt.Orientation.Vertical)
+
+        table_container = QWidget()
+        table_layout = QVBoxLayout(table_container)
+        table_layout.setContentsMargins(0, 0, 0, 0)
+        table_layout.setSpacing(6)
+        table_label = QLabel("Recent Records")
+        table_label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
+        table_layout.addWidget(table_label)
         self.table = QTableWidget()
         self.table.setColumnCount(7)
         self.table.setHorizontalHeaderLabels(
@@ -309,17 +325,26 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
-        self.table.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        layout.addWidget(self.table, stretch=1)
+        self.table.setMinimumHeight(180)
+        table_layout.addWidget(self.table)
+        splitter.addWidget(table_container)
 
-        # Log view
+        log_container = QWidget()
+        log_layout = QVBoxLayout(log_container)
+        log_layout.setContentsMargins(0, 0, 0, 0)
+        log_layout.setSpacing(6)
         log_label = QLabel("Recent Logs")
         log_label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
-        layout.addWidget(log_label)
+        log_layout.addWidget(log_label)
         self.log_view = QTextEdit()
         self.log_view.setReadOnly(True)
-        self.log_view.setMaximumHeight(110)
-        layout.addWidget(self.log_view)
+        self.log_view.setMinimumHeight(90)
+        log_layout.addWidget(self.log_view)
+        splitter.addWidget(log_container)
+
+        splitter.setSizes([420, 130])
+        splitter.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        layout.addWidget(splitter, stretch=1)
 
         self.statusBar().showMessage("Ready")
 
@@ -327,9 +352,11 @@ class MainWindow(QMainWindow):
         card = QFrame()
         card.setStyleSheet(
             "QFrame { background-color: white; border: 1px solid #e2e8f0; "
-            "border-radius: 10px; padding: 12px; }"
+            "border-radius: 10px; }"
         )
         card.setFrameShape(QFrame.Shape.StyledPanel)
+        card.setMinimumHeight(85)
+        card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
         layout = QVBoxLayout(card)
         layout.setSpacing(4)
         layout.setContentsMargins(14, 10, 14, 10)
@@ -337,8 +364,10 @@ class MainWindow(QMainWindow):
         title_lbl.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
         value_lbl = QLabel(f"{value} {unit}".strip())
         value_lbl.setStyleSheet("color: #0f172a; font-size: 20px; font-weight: 700;")
+        value_lbl.setWordWrap(True)
         layout.addWidget(title_lbl)
         layout.addWidget(value_lbl)
+        layout.addStretch()
         return card
 
     def _setup_scheduler(self):
