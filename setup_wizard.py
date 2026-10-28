@@ -76,6 +76,11 @@ class SetupWizard(QWizard):
         self.fallback_delay_spin.setValue(10)
         layout.addWidget(self.fallback_delay_spin)
 
+        layout.addWidget(QLabel("Timezone"))
+        self.timezone_input = QLineEdit("Asia/Makassar")
+        self.timezone_input.setPlaceholderText("e.g. Asia/Makassar")
+        layout.addWidget(self.timezone_input)
+
         page.registerField("network_name*", self.network_input)
         page.registerField("location*", self.location_input)
         page.registerField("interval", self.interval_spin, "value")
@@ -83,6 +88,7 @@ class SetupWizard(QWizard):
         page.registerField("ping_host", self.ping_host_input)
         page.registerField("fallback_host", self.fallback_host_input)
         page.registerField("fallback_delay", self.fallback_delay_spin, "value")
+        page.registerField("timezone", self.timezone_input)
         return page
 
     def _create_summary_page(self) -> QWizardPage:
@@ -105,6 +111,7 @@ class SetupWizard(QWizard):
             f"Speedtest interval: {self.field('interval')} seconds\n"
             f"Ping host: {self.field('ping_host')}\n"
             f"Fallback host: {self.field('fallback_host')} (delay {self.field('fallback_delay')}s)\n"
+            f"Timezone: {self.field('timezone')}\n"
             f"\nCloud sync can be enabled later in Settings.\n"
         )
         self.summary_label.setText(text)
@@ -118,6 +125,7 @@ class SetupWizard(QWizard):
         data["ping_host"] = self.field("ping_host") or "8.8.8.8"
         data["fallback_host"] = self.field("fallback_host") or "8.8.4.4"
         data["fallback_delay_seconds"] = self.field("fallback_delay")
+        data["timezone"] = self.field("timezone") or "Asia/Makassar"
 
         _write_config(self.config_path, data)
 

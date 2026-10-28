@@ -6,6 +6,11 @@ import sys
 import threading
 from datetime import datetime, timezone, timedelta
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover - Python <3.9
+    from backports.zoneinfo import ZoneInfo
+
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -35,6 +40,14 @@ from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QGuiApplication
 
 from config import Config, DEFAULT_CONFIG, load_config
+
+
+def _localize(dt: datetime, tz_name: str) -> datetime:
+    if dt is None:
+        return dt
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(ZoneInfo(tz_name))
 from db import (
     SpeedRecord,
     get_engine,
@@ -172,6 +185,7 @@ class SettingsDialog(QDialog):
         self.fallback_delay_spin = QSpinBox()
         self.fallback_delay_spin.setRange(0, 300)
         self.fallback_delay_spin.setValue(config.fallback_delay_seconds)
+        self.timezone_input = QLineEdit(config.timezone)
         self.project_input = QLineEdit(config.firebase_project_id)
         self.api_key_input = QLineEdit(config.firebase_api_key)
         self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
@@ -184,6 +198,7 @@ class SettingsDialog(QDialog):
         layout.addRow("Ping Host", self.ping_host_input)
         layout.addRow("Fallback Host", self.fallback_host_input)
         layout.addRow("Fallback Delay (s)", self.fallback_delay_spin)
+        layout.addRow("Timezone", self.timezone_input)
         layout.addRow("Firebase Project ID", self.project_input)
         layout.addRow("Firebase API Key", self.api_key_input)
         layout.addRow("Collection", self.collection_input)
@@ -209,6 +224,7 @@ class SettingsDialog(QDialog):
             "ping_host": self.ping_host_input.text(),
             "fallback_host": self.fallback_host_input.text(),
             "fallback_delay_seconds": self.fallback_delay_spin.value(),
+            "timezone": self.timezone_input.text(),
             "firebase_project_id": self.project_input.text(),
             "firebase_api_key": self.api_key_input.text(),
             "firebase_collection": self.collection_input.text(),
@@ -416,7 +432,8 @@ class MainWindow(QMainWindow):
                 "border-radius: 16px; font-weight: 700; font-size: 13px;"
             )
         self.last_check = record.timestamp
-        self._debug_label.setText(f"Last update: {record.timestamp.strftime('%H:%M:%S')}")
+        local_ts = _localize(record.timestamp, self.config.timezone)
+        self._debug_label.setText(f"Last update (WITA): {local_ts.strftime('%H:%M:%S')}")
         self._refresh_table()
         self._refresh_stats()
 
@@ -430,9 +447,10 @@ class MainWindow(QMainWindow):
             self._set_card_value(self.uptime, stats["uptime_percent"], "{:.1f}", "%")
             self._set_card_value(self.synced_label, "on" if self.sync.enabled() else "off", None, "")
             if hasattr(self, "last_check"):
+                local_ts = _localize(self.last_check, self.config.timezone)
                 self._set_card_value(
                     self.last_check_label,
-                    self.last_check.strftime("%H:%M:%S"),
+                    local_ts.strftime("%H:%M:%S"),
                     None,
                     "",
                 )
@@ -457,7 +475,8 @@ class MainWindow(QMainWindow):
 
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):
-            self.table.setItem(i, 0, QTableWidgetItem(r.timestamp.strftime("%Y-%m-%d %H:%M:%S")))
+            local_ts = _localize(r.timestamp, self.config.timezone)
+            self.table.setItem(i, 0, QTableWidgetItem(local_ts.strftime("%Y-%m-%d %H:%M:%S")))
             self.table.setItem(i, 1, QTableWidgetItem(r.ssid or ""))
             status_item = QTableWidgetItem(r.status.upper())
             if r.status == "online":

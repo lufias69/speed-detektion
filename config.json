@@ -17,5 +17,6 @@
   "location": "Moolo Indah",
   "firebase_api_key": "",
   "firebase_project_id": "",
-  "firebase_collection": "speed_records"
+  "firebase_collection": "speed_records",
+  "timezone": "Asia/Makassar"
 }
