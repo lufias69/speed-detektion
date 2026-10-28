@@ -73,13 +73,31 @@ class SpeedTester:
                 text=True,
                 timeout=5,
             )
-            return proc.returncode == 0
-        except Exception:
+            available = proc.returncode == 0
+            if not available:
+                logger.warning(
+                    "speedtest-cli not available at %s (exit code %s): %s",
+                    self.cli_path,
+                    proc.returncode,
+                    proc.stderr.strip() or "no output",
+                )
+            return available
+        except FileNotFoundError:
+            logger.error(
+                "speedtest-cli executable not found: %s. "
+                "Install it with: sudo apt-get install speedtest-cli (Debian/Ubuntu) "
+                "or pip install speedtest-cli.",
+                self.cli_path,
+            )
+            return False
+        except Exception as exc:
+            logger.error("speedtest-cli availability check failed: %s", exc)
             return False
 
     def _execute(self) -> Optional[SpeedTestResult]:
         """Run speedtest-cli directly and parse the JSON output."""
         cmd = [self.cli_path, "--json"]
+        logger.info("running speedtest command: %s", " ".join(cmd))
         try:
             proc = subprocess.run(
                 cmd,
@@ -89,19 +107,43 @@ class SpeedTester:
                 timeout=120,
             )
             if proc.returncode != 0:
-                logger.warning("speedtest failed: %s", proc.stderr.strip())
+                stderr = proc.stderr.strip()
+                logger.error(
+                    "speedtest failed with exit code %s: %s",
+                    proc.returncode,
+                    stderr or "(no stderr)",
+                )
                 return None
 
-            data = json.loads(proc.stdout)
+            if not proc.stdout.strip():
+                logger.error("speedtest returned empty output")
+                return None
+
+            try:
+                data = json.loads(proc.stdout)
+            except json.JSONDecodeError as exc:
+                logger.error(
+                    "speedtest returned invalid JSON: %s\nOutput: %s",
+                    exc,
+                    proc.stdout[:500],
+                )
+                return None
+
             download = data.get("download", 0) / 1_000_000  # bits/s -> Mbps
             upload = data.get("upload", 0) / 1_000_000
             ping = data.get("ping", 0)
+            logger.info(
+                "speedtest succeeded: down=%.2f Mbps up=%.2f Mbps ping=%.1f ms",
+                download,
+                upload,
+                ping,
+            )
             return SpeedTestResult(download, upload, ping)
         except subprocess.TimeoutExpired:
-            logger.warning("speedtest timed out")
+            logger.error("speedtest timed out after 120 seconds")
             return None
         except Exception as exc:
-            logger.warning("speedtest error: %s", exc)
+            logger.error("speedtest error: %s", exc, exc_info=True)
             return None
 
     def run(self, force: bool = False) -> Optional[SpeedTestResult]:
@@ -113,6 +155,12 @@ class SpeedTester:
         Returns:
             SpeedTestResult on success, None on failure or if skipped.
         """
+        if not self.is_available():
+            logger.error(
+                "cannot run speedtest: %s is not available", self.cli_path
+            )
+            return None
+
         if not force:
             last_run = _read_last_run(self.cooldown_file)
             if not _should_run(last_run, self.interval_seconds):
@@ -126,6 +174,8 @@ class SpeedTester:
         result = self._execute()
         if result is not None:
             _write_last_run(self.cooldown_file)
+        else:
+            logger.warning("speedtest produced no result; cooldown not updated")
         return result
 
     def __repr__(self) -> str:
