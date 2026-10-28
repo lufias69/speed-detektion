@@ -137,11 +137,18 @@ def _write_config(path: str, data: dict):
             json.dump(data, f, indent=2)
 
 
-def run_wizard(config_path: str = "config.json") -> Config:
-    app = QApplication(sys.argv)
+def run_wizard(config_path: str = "config.json", app: QApplication = None) -> Config:
+    """Run the setup wizard. If an existing QApplication is provided, use it."""
+    created_app = False
+    if app is None:
+        app = QApplication(sys.argv)
+        created_app = True
     wizard = SetupWizard(config_path)
-    if wizard.exec() != QWizard.DialogCode.Accepted:
-        sys.exit(0)
+    result = wizard.exec()
+    if result != QWizard.DialogCode.Accepted:
+        if created_app:
+            sys.exit(0)
+        raise RuntimeError("Setup cancelled")
     return wizard.save_config()
 
 

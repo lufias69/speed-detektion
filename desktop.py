@@ -498,7 +498,7 @@ def run_desktop(config_path: str = "config.json"):
 
     if not os.path.exists(config_path):
         from setup_wizard import run_wizard
-        config = run_wizard(config_path)
+        config = run_wizard(config_path, app=app)
     else:
         config = load_config(config_path)
         for key, value in DEFAULT_CONFIG.items():
@@ -506,7 +506,7 @@ def run_desktop(config_path: str = "config.json"):
                 setattr(config, key, value)
         if _config_needs_setup(config):
             from setup_wizard import run_wizard
-            config = run_wizard(config_path)
+            config = run_wizard(config_path, app=app)
 
     setup_logging(config.log_path)
 
