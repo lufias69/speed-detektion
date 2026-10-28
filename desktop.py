@@ -315,9 +315,9 @@ class MainWindow(QMainWindow):
         self.avg_down = self._summary_card("Avg Download", "-", "Mbps")
         self.avg_up = self._summary_card("Avg Upload", "-", "Mbps")
         self.avg_ping = self._summary_card("Avg Ping", "-", "ms")
-        self.ping_ttl = self._summary_card("TTL", "-", "")
-        self.ping_min = self._summary_card("Ping Min", "-", "ms")
-        self.ping_max = self._summary_card("Ping Max", "-", "ms")
+        self.ping_ttl = self._summary_card("TTL (hops)", "-", "")
+        self.ping_min = self._summary_card("Ping Min (ms)", "-", "ms")
+        self.ping_max = self._summary_card("Ping Max (ms)", "-", "ms")
         self.ping_loss = self._summary_card("Packet Loss", "-", "%")
         self.uptime = self._summary_card("Uptime", "-", "%")
         self.conn_type = self._summary_card("Connection", "-", "")
@@ -364,7 +364,7 @@ class MainWindow(QMainWindow):
         self.table = QTableWidget()
         self.table.setColumnCount(15)
         self.table.setHorizontalHeaderLabels(
-            ["Date", "Time", "SSID", "Conn", "Status", "Ping", "TTL", "Size", "Min", "Max", "Avg", "Loss%", "Down", "Up", "Synced"]
+            ["Date", "Time", "SSID", "Conn", "Status", "Ping (ms)", "TTL (hops)", "Size (B)", "Min (ms)", "Max (ms)", "Avg (ms)", "Loss %", "Down (Mbps)", "Up (Mbps)", "Synced"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
