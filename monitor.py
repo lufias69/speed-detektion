@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from config import Config
 from checker import check_connection, CheckResult
 from db import SpeedRecord, add_record
-from speedtester import run_speedtest, SpeedTestResult
+from speedtester import SpeedTester, SpeedTestResult
 
 logger = logging.getLogger("speedmonitor")
 
@@ -20,6 +20,11 @@ class Monitor:
         self._session_factory = session_factory
         self.last_speed_test: Optional[datetime] = None
         self.was_online: bool = True
+        self._speed_tester = SpeedTester(
+            cli_path=config.speed_test_cli_path,
+            interval_seconds=config.speed_test_interval_seconds,
+            cooldown_file="data/.speedtest_last_run",
+        )
 
     def _should_run_speedtest(self, now: datetime) -> bool:
         if self.last_speed_test is None:
@@ -50,7 +55,7 @@ class Monitor:
 
         if result.status == "online":
             if self.config.run_speed_tests and self._should_run_speedtest(result.timestamp):
-                speed = run_speedtest(self.config.speed_test_cli_path)
+                speed = self._speed_tester.run()
                 if speed:
                     record.download_mbps = speed.download_mbps
                     record.upload_mbps = speed.upload_mbps
