@@ -658,8 +658,12 @@ class MainWindow(QMainWindow):
                     cooldown_file="data/.speedtest_last_run_manual",
                 )
                 logger.info("manual speedtest: SpeedTester created, cli=%s", tester.cli_path)
+                available = tester.is_available()
+                logger.info("manual speedtest: speedtest-cli available=%s", available)
                 speed = tester.run(force=True)
                 logger.info("manual speedtest: raw result=%s", speed)
+                if speed is None:
+                    logger.warning("manual speedtest: SpeedTester.run() returned None")
                 check = check_connection(self.config)
                 logger.info("manual speedtest: ping status=%s ping_ms=%s", check.status, check.ping_ms)
                 record = SpeedRecord(
