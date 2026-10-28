@@ -42,6 +42,25 @@ def _set_utc(mapper, connection, target):
         target.timestamp = target.timestamp.replace(tzinfo=timezone.utc)
 
 
+def _migrate_columns(engine):
+    """Add any columns that exist on the ORM model but are missing from the DB."""
+    with engine.connect() as conn:
+        result = conn.execute(text("PRAGMA table_info(speed_records)"))
+        existing = {row[1] for row in result}
+
+    model_columns = {
+        "connection_type": "VARCHAR(32)",
+        "adapter": "VARCHAR(255)",
+        "synced_at": "DATETIME",
+        "cloud_id": "VARCHAR(255)",
+    }
+    for col_name, col_type in model_columns.items():
+        if col_name not in existing:
+            with engine.connect() as conn:
+                conn.execute(text(f"ALTER TABLE speed_records ADD COLUMN {col_name} {col_type}"))
+                conn.commit()
+
+
 def get_engine(db_path: str):
     os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     # ":memory:" needs StaticPool so every thread shares the single connection;
@@ -55,6 +74,7 @@ def get_engine(db_path: str):
     else:
         engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
+    _migrate_columns(engine)
 
     with engine.connect() as conn:
         conn.execute(text("PRAGMA journal_mode=WAL;"))
