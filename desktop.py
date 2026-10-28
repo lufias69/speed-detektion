@@ -35,6 +35,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSplitter,
     QScreen,
+    QComboBox,
 )
 from PyQt6.QtCore import QTimer, Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QGuiApplication
@@ -175,6 +176,11 @@ class SettingsDialog(QDialog):
 
         self.network_input = QLineEdit(config.network_name)
         self.location_input = QLineEdit(config.location)
+        self.connection_type_combo = QComboBox()
+        self.connection_type_combo.setEditable(True)
+        for t in ["WiFi", "Ethernet", "Fiber", "Mobile", "Unknown"]:
+            self.connection_type_combo.addItem(t)
+        self.connection_type_combo.setCurrentText(config.connection_type or "Unknown")
         self.interval_spin = QSpinBox()
         self.interval_spin.setRange(300, 86400)
         self.interval_spin.setValue(config.speed_test_interval_seconds)
@@ -193,6 +199,7 @@ class SettingsDialog(QDialog):
 
         layout.addRow("Network / ISP", self.network_input)
         layout.addRow("Location", self.location_input)
+        layout.addRow("Connection Type", self.connection_type_combo)
         layout.addRow("Speedtest Interval (s)", self.interval_spin)
         layout.addRow(self.run_speedtests_check)
         layout.addRow("Ping Host", self.ping_host_input)
@@ -219,6 +226,7 @@ class SettingsDialog(QDialog):
             **self.config.__dict__,
             "network_name": self.network_input.text(),
             "location": self.location_input.text(),
+            "connection_type": self.connection_type_combo.currentText(),
             "speed_test_interval_seconds": self.interval_spin.value(),
             "run_speed_tests": self.run_speedtests_check.isChecked(),
             "ping_host": self.ping_host_input.text(),
@@ -273,7 +281,8 @@ class MainWindow(QMainWindow):
         title_font = QFont("Segoe UI", 22, QFont.Weight.Bold)
         title.setFont(title_font)
         title.setStyleSheet("color: #1e293b;")
-        subtitle = QLabel(f"{self.config.network_name} • {self.config.location}")
+        conn_label = self.config.connection_type or "Unknown"
+        subtitle = QLabel(f"{self.config.network_name} • {self.config.location} • {conn_label}")
         subtitle.setStyleSheet("color: #64748b; font-size: 13px;")
         header_left = QVBoxLayout()
         header_left.setSpacing(2)
@@ -304,6 +313,7 @@ class MainWindow(QMainWindow):
         self.avg_up = self._summary_card("Avg Upload", "-", "Mbps")
         self.avg_ping = self._summary_card("Avg Ping", "-", "ms")
         self.uptime = self._summary_card("Uptime", "-", "%")
+        self.conn_type = self._summary_card("Connection", "-", "")
         self.synced_label = self._summary_card("Cloud Sync", "off", "")
         self.last_check_label = self._summary_card("Last Check", "-", "")
 
@@ -311,8 +321,9 @@ class MainWindow(QMainWindow):
         cards.addWidget(self.avg_up, 0, 1)
         cards.addWidget(self.avg_ping, 0, 2)
         cards.addWidget(self.uptime, 0, 3)
-        cards.addWidget(self.synced_label, 1, 0)
-        cards.addWidget(self.last_check_label, 1, 1)
+        cards.addWidget(self.conn_type, 1, 0)
+        cards.addWidget(self.synced_label, 1, 1)
+        cards.addWidget(self.last_check_label, 1, 2)
         layout.addLayout(cards)
 
         # Actions
@@ -340,9 +351,9 @@ class MainWindow(QMainWindow):
         table_label.setStyleSheet("color: #64748b; font-size: 12px; font-weight: 600;")
         table_layout.addWidget(table_label)
         self.table = QTableWidget()
-        self.table.setColumnCount(7)
+        self.table.setColumnCount(8)
         self.table.setHorizontalHeaderLabels(
-            ["Time", "SSID", "Status", "Ping", "Down", "Up", "Synced"]
+            ["Time", "SSID", "Connection", "Status", "Ping", "Down", "Up", "Synced"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.verticalHeader().setVisible(False)
@@ -434,6 +445,7 @@ class MainWindow(QMainWindow):
         self.last_check = record.timestamp
         local_ts = _localize(record.timestamp, self.config.timezone)
         self._debug_label.setText(f"Last update (WITA): {local_ts.strftime('%H:%M:%S')}")
+        self._set_card_value(self.conn_type, record.connection_type or "Unknown", None, "")
         self._refresh_table()
         self._refresh_stats()
 
@@ -478,19 +490,20 @@ class MainWindow(QMainWindow):
             local_ts = _localize(r.timestamp, self.config.timezone)
             self.table.setItem(i, 0, QTableWidgetItem(local_ts.strftime("%Y-%m-%d %H:%M:%S")))
             self.table.setItem(i, 1, QTableWidgetItem(r.ssid or ""))
+            self.table.setItem(i, 2, QTableWidgetItem(r.connection_type or ""))
             status_item = QTableWidgetItem(r.status.upper())
             if r.status == "online":
                 status_item.setForeground(self._color("#10b981"))
             else:
                 status_item.setForeground(self._color("#ef4444"))
             status_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(i, 2, status_item)
-            self.table.setItem(i, 3, QTableWidgetItem(self._fmt_num(r.ping_ms, "{:.1f}")))
-            self.table.setItem(i, 4, QTableWidgetItem(self._fmt_num(r.download_mbps, "{:.2f}")))
-            self.table.setItem(i, 5, QTableWidgetItem(self._fmt_num(r.upload_mbps, "{:.2f}")))
+            self.table.setItem(i, 3, status_item)
+            self.table.setItem(i, 4, QTableWidgetItem(self._fmt_num(r.ping_ms, "{:.1f}")))
+            self.table.setItem(i, 5, QTableWidgetItem(self._fmt_num(r.download_mbps, "{:.2f}")))
+            self.table.setItem(i, 6, QTableWidgetItem(self._fmt_num(r.upload_mbps, "{:.2f}")))
             sync_item = QTableWidgetItem("Yes" if r.cloud_id else "No")
             sync_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-            self.table.setItem(i, 6, sync_item)
+            self.table.setItem(i, 7, sync_item)
 
     def _fmt_num(self, value, fmt: str) -> str:
         return fmt.format(value) if value is not None else "-"
@@ -602,10 +615,9 @@ def run_desktop(config_path: str = "config.json", background: bool = False):
         window._center_window()
         sys.exit(app.exec())
     except Exception as exc:
-        print("FATAL: desktop app failed to start", exc, file=sys.stderr)
-        traceback.print_exc()
-        input("Press Enter to exit...")
-        sys.exit(1)
+        logger.warning("PyQt6 GUI failed (%s). Falling back to Tkinter.", exc)
+        from desktop_tk import run_tk_desktop
+        run_tk_desktop(config_path)
 
 
 if __name__ == "__main__":

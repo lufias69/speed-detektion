@@ -24,6 +24,7 @@ DEFAULT_CONFIG = {
     "firebase_project_id": "",
     "firebase_collection": "speed_records",
     "timezone": "Asia/Makassar",
+    "connection_type": "",
 }
 
 
@@ -49,6 +50,7 @@ class Config:
     firebase_project_id: str = ""
     firebase_collection: str = "speed_records"
     timezone: str = "Asia/Makassar"
+    connection_type: str = ""
 
 
 def load_config(path: str) -> Config:

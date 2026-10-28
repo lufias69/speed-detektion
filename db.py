@@ -25,6 +25,8 @@ class SpeedRecord(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     timestamp = Column(DateTime(timezone=True), nullable=False, index=True)
     ssid = Column(String(255), nullable=True)
+    connection_type = Column(String(32), nullable=True)
+    adapter = Column(String(255), nullable=True)
     status = Column(String(16), nullable=False)
     ping_ms = Column(Float, nullable=True)
     download_mbps = Column(Float, nullable=True)

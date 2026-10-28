@@ -9,6 +9,8 @@ def _check_result():
     return CheckResult(
         timestamp=datetime.now(timezone.utc),
         ssid="WiFi",
+        connection_type="WiFi",
+        adapter="WiFi",
         status="online",
         ping_ms=10.0,
     )

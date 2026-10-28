@@ -1,4 +1,5 @@
 import platform
+import re
 import subprocess
 import time
 from dataclasses import dataclass
@@ -12,6 +13,8 @@ from config import Config
 class CheckResult:
     timestamp: datetime
     ssid: Optional[str]
+    connection_type: Optional[str]
+    adapter: Optional[str]
     status: str
     ping_ms: Optional[float]
     error_message: Optional[str] = None
@@ -58,6 +61,76 @@ def _parse_ping_output(output: str, system: str) -> Optional[float]:
     except Exception:
         pass
     return None
+
+
+def _get_active_connection() -> Tuple[Optional[str], Optional[str]]:
+    """Return (ssid_or_adapter, connection_type) for the active network."""
+    system = platform.system().lower()
+    try:
+        if system == "windows":
+            return _get_active_connection_windows()
+        return _get_active_connection_linux()
+    except Exception:
+        return None, None
+
+
+def _get_active_connection_windows() -> Tuple[Optional[str], Optional[str]]:
+    # Try Wi-Fi first
+    ssid = _get_ssid_windows()
+    if ssid:
+        return ssid, "WiFi"
+
+    # Otherwise look for an active Ethernet adapter
+    proc = subprocess.run(
+        ["netsh", "interface", "show", "interface"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=5,
+    )
+    if proc.returncode != 0:
+        return None, None
+
+    for line in proc.stdout.splitlines():
+        if "Connected" in line and "Dedicated" in line:
+            parts = [p.strip() for p in line.split() if p.strip()]
+            # Typical line: Admin State State             Type             Interface Name
+            #                Connected    Connected      Dedicated      Ethernet
+            if len(parts) >= 4:
+                adapter = parts[-1]
+                if "wi-fi" in adapter.lower() or "wireless" in adapter.lower():
+                    continue
+                return adapter, "Ethernet"
+    return None, None
+
+
+def _get_active_connection_linux() -> Tuple[Optional[str], Optional[str]]:
+    ssid = _get_ssid_linux()
+    if ssid:
+        return ssid, "WiFi"
+
+    # Find active ethernet interface (not loopback, state UP, has carrier)
+    try:
+        proc = subprocess.run(
+            ["ip", "-o", "link", "show", "up"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=5,
+        )
+        if proc.returncode == 0:
+            for line in proc.stdout.splitlines():
+                m = re.match(r"\d+:\s+([^:@]+)[^:]*:", line)
+                if not m:
+                    continue
+                iface = m.group(1).strip()
+                if iface == "lo" or iface.startswith("docker") or iface.startswith("br-"):
+                    continue
+                if "state UP" in line:
+                    return iface, "Ethernet"
+    except Exception:
+        pass
+    return None, None
 
 
 def _get_ssid() -> Optional[str]:
@@ -114,7 +187,11 @@ def _get_ssid_linux() -> Optional[str]:
 
 def check_connection(config: Config) -> CheckResult:
     timestamp = datetime.now(timezone.utc)
-    ssid = _get_ssid()
+    adapter, detected_type = _get_active_connection()
+
+    # If user has overridden the connection type (e.g. Fiber), keep their label
+    # but still use the detected adapter name if available.
+    connection_type = config.connection_type or detected_type or "Unknown"
 
     # Primary host
     for attempt in range(config.ping_retries):
@@ -122,7 +199,9 @@ def check_connection(config: Config) -> CheckResult:
         if success:
             return CheckResult(
                 timestamp=timestamp,
-                ssid=ssid,
+                ssid=adapter,
+                connection_type=connection_type,
+                adapter=adapter,
                 status="online",
                 ping_ms=latency,
             )
@@ -135,14 +214,18 @@ def check_connection(config: Config) -> CheckResult:
             if success:
                 return CheckResult(
                     timestamp=timestamp,
-                    ssid=ssid,
+                    ssid=adapter,
+                    connection_type=connection_type,
+                    adapter=adapter,
                     status="online",
                     ping_ms=latency,
                 )
 
     return CheckResult(
         timestamp=timestamp,
-        ssid=ssid,
+        ssid=adapter,
+        connection_type=connection_type,
+        adapter=adapter,
         status="offline",
         ping_ms=None,
     )

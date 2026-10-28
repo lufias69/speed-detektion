@@ -36,6 +36,8 @@ class Monitor:
         record = SpeedRecord(
             timestamp=result.timestamp,
             ssid=result.ssid,
+            connection_type=result.connection_type,
+            adapter=result.adapter,
             status=result.status,
             ping_ms=result.ping_ms,
         )

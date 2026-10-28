@@ -37,6 +37,8 @@ class FirestoreSync:
             "fields": {
                 "timestamp": {"timestampValue": iso_ts},
                 "ssid": {"stringValue": record.ssid or ""},
+                "connection_type": {"stringValue": record.connection_type or ""},
+                "adapter": {"stringValue": record.adapter or ""},
                 "status": {"stringValue": record.status},
                 "ping_ms": {"doubleValue": record.ping_ms} if record.ping_ms is not None else {"nullValue": None},
                 "download_mbps": {"doubleValue": record.download_mbps} if record.download_mbps is not None else {"nullValue": None},

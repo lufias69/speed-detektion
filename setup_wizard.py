@@ -14,10 +14,12 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QMessageBox,
     QCheckBox,
+    QComboBox,
 )
 from PyQt6.QtCore import Qt
 
 from config import DEFAULT_CONFIG, Config
+from checker import _get_active_connection
 
 
 class SetupWizard(QWizard):
@@ -51,6 +53,17 @@ class SetupWizard(QWizard):
         self.location_input.setPlaceholderText("e.g. Jakarta - Lantai 2")
         layout.addWidget(self.location_input)
 
+        # Connection type: auto-detect, allow user override (e.g. Fiber)
+        layout.addWidget(QLabel("Connection Type"))
+        self.connection_type_combo = QComboBox()
+        self.connection_type_combo.setEditable(True)
+        detected_adapter, detected_type = _get_active_connection()
+        for t in ["WiFi", "Ethernet", "Fiber", "Mobile", "Unknown"]:
+            self.connection_type_combo.addItem(t)
+        if detected_type:
+            self.connection_type_combo.setCurrentText(detected_type)
+        layout.addWidget(self.connection_type_combo)
+
         layout.addWidget(QLabel("Speedtest Interval (seconds)"))
         self.interval_spin = QSpinBox()
         self.interval_spin.setRange(300, 86400)
@@ -83,6 +96,7 @@ class SetupWizard(QWizard):
 
         page.registerField("network_name*", self.network_input)
         page.registerField("location*", self.location_input)
+        page.registerField("connection_type", self.connection_type_combo)
         page.registerField("interval", self.interval_spin, "value")
         page.registerField("run_speedtests", self.run_speedtests_check)
         page.registerField("ping_host", self.ping_host_input)
@@ -108,6 +122,7 @@ class SetupWizard(QWizard):
         text = (
             f"Network: {self.field('network_name')}\n"
             f"Location: {self.field('location')}\n"
+            f"Connection: {self.field('connection_type')}\n"
             f"Speedtest interval: {self.field('interval')} seconds\n"
             f"Ping host: {self.field('ping_host')}\n"
             f"Fallback host: {self.field('fallback_host')} (delay {self.field('fallback_delay')}s)\n"
@@ -120,6 +135,7 @@ class SetupWizard(QWizard):
         data = {**DEFAULT_CONFIG}
         data["network_name"] = self.field("network_name") or ""
         data["location"] = self.field("location") or ""
+        data["connection_type"] = self.field("connection_type") or "Unknown"
         data["speed_test_interval_seconds"] = self.field("interval")
         data["run_speed_tests"] = bool(self.field("run_speedtests"))
         data["ping_host"] = self.field("ping_host") or "8.8.8.8"
