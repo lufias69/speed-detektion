@@ -260,7 +260,7 @@ class TkDesktopApp:
         for r in rows:
             local_ts = _localize(r.timestamp, self.config.timezone)
             self.tree.insert("", tk.END, values=(
-                local_ts.strftime("%Y-%m-%d %H:%M:%S"),
+                local_ts.strftime("%H:%M:%S"),
                 r.ssid or "",
                 r.connection_type or "",
                 r.status.upper(),

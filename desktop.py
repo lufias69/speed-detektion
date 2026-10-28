@@ -503,7 +503,7 @@ class MainWindow(QMainWindow):
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):
             local_ts = _localize(r.timestamp, self.config.timezone)
-            self.table.setItem(i, 0, QTableWidgetItem(local_ts.strftime("%Y-%m-%d %H:%M:%S")))
+            self.table.setItem(i, 0, QTableWidgetItem(local_ts.strftime("%H:%M:%S")))
             self.table.setItem(i, 1, QTableWidgetItem(r.ssid or ""))
             self.table.setItem(i, 2, QTableWidgetItem(r.connection_type or ""))
             status_item = QTableWidgetItem(r.status.upper())
